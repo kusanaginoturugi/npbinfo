@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NPBプロ野球情報（スタンドアロン版）</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+      background: #f4f6f9;
+      color: #1a1a2e;
+      font-size: 14px;
+    }
+
+    header {
+      background: linear-gradient(135deg, #0a1628 0%, #1a3a5c 100%);
+      color: #fff;
+      padding: 0 16px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .badge {
+      background: #e8392a;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    nav { display: flex; gap: 4px; }
+
+    nav button {
+      background: transparent;
+      border: none;
+      color: rgba(255,255,255,0.7);
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    nav button:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    nav button.active { background: rgba(255,255,255,0.2); color: #fff; font-weight: 600; }
+
+    main {
+      max-width: 1100px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+
+    .section {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      padding: 20px;
+      display: none;
+    }
+
+    .section.active { display: block; }
+
+    .section h2 {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #e8e8f0;
+    }
+
+    .tab-bar { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+
+    .tab-bar button {
+      padding: 6px 16px;
+      border-radius: 20px;
+      border: 1.5px solid #ccc;
+      background: #fff;
+      color: #555;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
+    }
+
+    .tab-bar button.active {
+      border-color: #003087;
+      color: #003087;
+      font-weight: 600;
+      background: #f0f4ff;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+      border-radius: 6px;
+      border: 1px solid #e0e4ef;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    thead th {
+      background: #1a3a5c;
+      color: #fff;
+      padding: 9px 12px;
+      text-align: center;
+      font-size: 12px;
+    }
+
+    tbody td {
+      padding: 8px 12px;
+      text-align: center;
+      border-bottom: 1px solid #eef0f7;
+    }
+
+    tbody tr:nth-child(even) { background: #f8f9ff; }
+    tbody tr:hover { background: #eef4ff; }
+
+    .rank { font-weight: 700; color: #003087; }
+
+    .team-cell {
+      text-align: left !important;
+      font-weight: 600;
+      min-width: 120px;
+    }
+
+    .team-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #555;
+      color: #fff;
+      font-size: 9px;
+      font-weight: 700;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+
+    .status {
+      text-align: center;
+      padding: 40px;
+      color: #888;
+    }
+
+    .error {
+      background: #fff5f5;
+      border: 1px solid #ffcccc;
+      border-radius: 6px;
+      padding: 14px 18px;
+      color: #c0392b;
+      line-height: 1.7;
+    }
+
+    footer {
+      text-align: center;
+      padding: 16px;
+      color: #999;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1><span class="badge">NPB</span>プロ野球情報</h1>
+  <nav>
+    <button class="active" onclick="showTab('standings')">順位表</button>
+  </nav>
+</header>
+
+<main>
+  <section id="standings" class="section active">
+    <h2>順位表</h2>
+    <div class="tab-bar">
+      <button class="active" onclick="loadStandings('cl', this)">セントラル・リーグ</button>
+      <button onclick="loadStandings('pl', this)">パシフィック・リーグ</button>
+      <button onclick="loadStandings('cp', this)">セ・パ交流戦</button>
+    </div>
+    <div id="standings-content"><div class="status">読み込み中...</div></div>
+  </section>
+</main>
+
+<footer>
+  データ出典: <a href="https://github.com/Ant2357/npb-result" target="_blank">npb-result API</a>（非公式）
+  ／ このファイルはサーバー不要のスタンドアロン版です
+</footer>
+
+<script>
+  const TEAM_COLORS = {
+    '巨人': '#f0821e', '阪神': '#ffe100', '広島': '#e50012', '中日': '#003087',
+    'ヤクルト': '#00a650', 'DeNA': '#003087', '横浜DeNA': '#003087',
+    'ソフトバンク': '#ffb81c', '日本ハム': '#003087', '楽天': '#be0a21',
+    'ロッテ': '#222222', 'オリックス': '#003087', '西武': '#004b8d',
+  };
+
+  const STANDINGS_COLS = [
+    { key: 'rank',              label: '順位' },
+    { key: 'team',              label: 'チーム', cls: 'team-cell' },
+    { key: 'games',             label: '試合' },
+    { key: 'win',               label: '勝' },
+    { key: 'lose',              label: '敗' },
+    { key: 'draw',              label: '分' },
+    { key: 'pct',               label: '勝率' },
+    { key: 'gb',                label: 'G差' },
+    { key: 'avg',               label: '打率' },
+    { key: 'era',               label: '防御率' },
+    { key: 'hr',                label: 'HR' },
+    { key: 'sb',                label: '盗塁' },
+  ];
+
+  const cache = {};
+
+  // ページ読み込み時にセ・リーグをロード
+  loadStandings('cl', document.querySelector('.tab-bar button'));
+
+  async function loadStandings(league, btn) {
+    // タブの active 切り替え
+    document.querySelectorAll('.tab-bar button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    const el = document.getElementById('standings-content');
+
+    if (cache[league]) {
+      renderTable(el, cache[league]);
+      return;
+    }
+
+    el.innerHTML = '<div class="status">読み込み中...</div>';
+
+    try {
+      const res = await fetch(`https://npb-result.ant-npb.workers.dev/api/${league}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const rows = Array.isArray(data) ? data : (data.teams ?? []);
+      cache[league] = rows;
+      renderTable(el, rows);
+    } catch (err) {
+      el.innerHTML = `
+        <div class="error">
+          <strong>データの取得に失敗しました:</strong> ${err.message}<br>
+          <small>※ CORS エラーの場合はサーバー版（npm run dev）をお使いください。</small>
+        </div>`;
+    }
+  }
+
+  function renderTable(el, rows) {
+    if (!rows.length) {
+      el.innerHTML = '<div class="status">データがありません</div>';
+      return;
+    }
+
+    const thead = STANDINGS_COLS.map(c => `<th>${c.label}</th>`).join('');
+
+    const tbody = rows.map((row, i) => {
+      const cells = STANDINGS_COLS.map(col => {
+        let val = row[col.key] ?? '-';
+        if (col.key === 'team') {
+          const color = TEAM_COLORS[val] ?? '#555';
+          const short = val.slice(-2);
+          val = `<span class="team-icon" style="background:${color}">${short}</span>${val}`;
+        }
+        if (col.key === 'rank') val = i + 1;
+        return `<td class="${col.cls ?? (col.key === 'rank' ? 'rank' : '')}">${val}</td>`;
+      }).join('');
+      return `<tr>${cells}</tr>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div class="table-wrapper">
+        <table>
+          <thead><tr>${thead}</tr></thead>
+          <tbody>${tbody}</tbody>
+        </table>
+      </div>`;
+  }
+
+  function showTab(name) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.getElementById(name).classList.add('active');
+  }
+</script>
+
+</body>
+</html>
