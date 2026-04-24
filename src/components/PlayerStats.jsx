@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { TEAMS } from '../data/teams';
 
 const LEAGUES = [
   { key: 'cl', label: 'セ・リーグ' },
@@ -33,14 +34,18 @@ const PITCHING_COLS = [
   { key: 'wins', label: '勝' },
   { key: 'losses', label: '敗' },
   { key: 'saves', label: 'S' },
-  { key: 'holds', label: 'H' },
   { key: 'ip', label: '投球回' },
   { key: 'so', label: '奪三振' },
-  { key: 'whip', label: 'WHIP' },
 ];
 
-function StatsTable({ players, type }) {
+const TEAM_MAP = {
+  '神': '阪神', 'デ': 'DeNA', 'ヤ': 'ヤクルト', '巨': '巨人', '広': '広島', '中': '中日',
+  'ソ': 'ソフトバンク', '日': '日本ハム', '楽': '楽天', 'ロ': 'ロッテ', 'オ': 'オリックス', '西': '西武'
+};
+
+function StatsTable({ players, type, sortConfig, onSort }) {
   const cols = type === 'batting' ? BATTING_COLS : PITCHING_COLS;
+  
   if (!players?.length) return <div className="status-msg">データがありません</div>;
 
   return (
@@ -49,24 +54,42 @@ function StatsTable({ players, type }) {
         <thead>
           <tr>
             {cols.map(c => (
-              <th key={c.key} style={c.align === 'left' ? { textAlign: 'left' } : {}}>
-                {c.label}
+              <th 
+                key={c.key} 
+                style={{ 
+                  textAlign: c.align === 'left' ? 'left' : 'center',
+                  cursor: 'pointer',
+                  userSelect: 'none'
+                }}
+                onClick={() => onSort(c.key)}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: c.align === 'left' ? 'flex-start' : 'center', gap: '4px' }}>
+                  {c.label}
+                  <span style={{ fontSize: '10px', opacity: sortConfig.key === c.key ? 1 : 0.3 }}>
+                    {sortConfig.key === c.key ? (sortConfig.direction === 'asc' ? '▲' : '▼') : '⇅'}
+                  </span>
+                </div>
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {players.slice(0, 30).map((p, i) => (
+          {players.map((p, i) => (
             <tr key={i} className={i % 2 === 0 ? 'row-even' : 'row-odd'}>
-              {cols.map(c => (
-                <td
-                  key={c.key}
-                  style={c.align === 'left' ? { textAlign: 'left' } : {}}
-                  className={c.key === 'name' ? 'player-name' : ''}
-                >
-                  {p[c.key] ?? '-'}
-                </td>
-              ))}
+              {cols.map(c => {
+                let val = p[c.key];
+                if (c.key === 'team') val = TEAM_MAP[val] || val;
+                
+                return (
+                  <td
+                    key={c.key}
+                    style={c.align === 'left' ? { textAlign: 'left' } : {}}
+                    className={c.key === 'name' ? 'player-name' : ''}
+                  >
+                    {val ?? '-'}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>
@@ -83,6 +106,9 @@ export default function PlayerStats() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [errorDetail, setErrorDetail] = useState(null);
+  
+  // ソート設定: 初期状態は順位の昇順
+  const [sortConfig, setSortConfig] = useState({ key: 'rank', direction: 'asc' });
 
   const cacheKey = `${type}-${league}-${year}`;
 
@@ -107,6 +133,38 @@ export default function PlayerStats() {
       .finally(() => setLoading(false));
   }, [cacheKey, cache, type, league, year]);
 
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
+    }));
+  };
+
+  const sortedPlayers = useMemo(() => {
+    const raw = cache[cacheKey] || [];
+    if (!sortConfig.key) return raw;
+
+    return [...raw].sort((a, b) => {
+      let aVal = a[sortConfig.key];
+      let bVal = b[sortConfig.key];
+
+      // 数値として比較を試みる
+      const aNum = parseFloat(aVal);
+      const bNum = parseFloat(bVal);
+
+      if (!isNaN(aNum) && !isNaN(bNum)) {
+        return sortConfig.direction === 'asc' ? aNum - bNum : bNum - aNum;
+      }
+
+      // 文字列比較
+      aVal = String(aVal || '');
+      bVal = String(bVal || '');
+      return sortConfig.direction === 'asc' 
+        ? aVal.localeCompare(bVal, 'ja') 
+        : bVal.localeCompare(aVal, 'ja');
+    });
+  }, [cache, cacheKey, sortConfig]);
+
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 12 }, (_, i) => currentYear - i);
 
@@ -119,7 +177,10 @@ export default function PlayerStats() {
             <button
               key={t.key}
               className={`tab-btn ${type === t.key ? 'active' : ''}`}
-              onClick={() => setType(t.key)}
+              onClick={() => {
+                setType(t.key);
+                setSortConfig({ key: 'rank', direction: 'asc' }); // タイプ切り替え時はソートリセット
+              }}
             >
               {t.label}
             </button>
@@ -162,7 +223,12 @@ export default function PlayerStats() {
         </div>
       )}
       {!loading && !error && cache[cacheKey] && (
-        <StatsTable players={cache[cacheKey]} type={type} />
+        <StatsTable 
+          players={sortedPlayers} 
+          type={type} 
+          sortConfig={sortConfig}
+          onSort={handleSort}
+        />
       )}
     </section>
   );
