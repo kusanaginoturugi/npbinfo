@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Standings from './components/Standings';
 import PlayerStats from './components/PlayerStats';
 import './App.css';
@@ -8,8 +8,36 @@ const TABS = [
   { key: 'players', label: '選手成績' },
 ];
 
+function useTheme() {
+  const [dark, setDark] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    localStorage.setItem('theme', dark ? 'dark' : 'light');
+  }, [dark]);
+
+  return [dark, setDark];
+}
+
 export default function App() {
   const [tab, setTab] = useState('standings');
+  const [dark, setDark] = useTheme();
+  const [showOptions, setShowOptions] = useState(false);
+  const optionsRef = useRef(null);
+
+  useEffect(() => {
+    function onClickOutside(e) {
+      if (optionsRef.current && !optionsRef.current.contains(e.target)) {
+        setShowOptions(false);
+      }
+    }
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
 
   return (
     <div className="app">
@@ -19,6 +47,7 @@ export default function App() {
             <span className="title-badge">NPB</span>
             <span>プロ野球情報</span>
           </h1>
+
           <nav className="nav-tabs">
             {TABS.map(t => (
               <button
@@ -30,6 +59,31 @@ export default function App() {
               </button>
             ))}
           </nav>
+
+          <div className="options-wrapper" ref={optionsRef}>
+            <button
+              className={`options-btn ${showOptions ? 'active' : ''}`}
+              onClick={() => setShowOptions(s => !s)}
+              aria-label="オプション"
+            >
+              ⚙
+            </button>
+            {showOptions && (
+              <div className="options-panel">
+                <div className="option-item">
+                  <span className="option-label">🌙 ダークモード</span>
+                  <button
+                    className={`toggle ${dark ? 'on' : ''}`}
+                    onClick={() => setDark(d => !d)}
+                    aria-pressed={dark}
+                    aria-label="ダークモード切り替え"
+                  >
+                    <span className="toggle-thumb" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 

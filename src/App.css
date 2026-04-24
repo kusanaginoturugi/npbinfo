@@ -1,12 +1,81 @@
+/* ─── テーマ変数（ライトモード） ────────────────────────────── */
+:root {
+  --bg-body:          #f4f6f9;
+  --color-text:       #1a1a2e;
+
+  --bg-section:       #fff;
+  --color-heading:    #1a1a2e;
+  --border-section:   #e8e8f0;
+
+  --border-table:     #e0e4ef;
+  --border-row:       #eef0f7;
+  --bg-row-even:      #fff;
+  --bg-row-odd:       #f8f9ff;
+  --bg-row-hover:     #eef4ff;
+
+  --color-tab:        #555;
+  --border-tab:       #ccc;
+  --bg-tab:           #fff;
+  --color-tab-active: #003087;
+  --border-tab-active:#003087;
+  --bg-tab-active:    #f0f4ff;
+
+  --color-rank:       #003087;
+
+  --bg-footer:        #fff;
+  --border-footer:    #e4e8f0;
+  --color-footer:     #999;
+  --color-status:     #888;
+
+  --bg-error:         #fff5f5;
+  --border-error:     #ffcccc;
+  --color-error:      #c0392b;
+}
+
+/* ─── ダークモード上書き ────────────────────────────────────── */
+[data-theme="dark"] {
+  --bg-body:          #0f1117;
+  --color-text:       #dde2ee;
+
+  --bg-section:       #1a1e2e;
+  --color-heading:    #dde2ee;
+  --border-section:   #252d40;
+
+  --border-table:     #252d40;
+  --border-row:       #252d40;
+  --bg-row-even:      #1a1e2e;
+  --bg-row-odd:       #1f2438;
+  --bg-row-hover:     #253050;
+
+  --color-tab:        #8a95a8;
+  --border-tab:       #333d52;
+  --bg-tab:           #1a1e2e;
+  --color-tab-active: #6aa0e0;
+  --border-tab-active:#6aa0e0;
+  --bg-tab-active:    #152240;
+
+  --color-rank:       #6aa0e0;
+
+  --bg-footer:        #1a1e2e;
+  --border-footer:    #252d40;
+  --color-footer:     #4a5060;
+  --color-status:     #4a5060;
+
+  --bg-error:         #1e0e0e;
+  --border-error:     #4a1818;
+  --color-error:      #e07070;
+}
+
 /* ─── Reset & Base ─────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
   font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
-  background: #f4f6f9;
-  color: #1a1a2e;
+  background: var(--bg-body);
+  color: var(--color-text);
   font-size: 14px;
   line-height: 1.5;
+  transition: background 0.2s, color 0.2s;
 }
 
 /* ─── App Layout ───────────────────────────────────────────── */
@@ -30,6 +99,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
 }
 
 .app-title {
@@ -38,6 +108,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
 }
 
 .title-badge {
@@ -50,7 +121,7 @@ body {
 }
 
 /* ─── Nav Tabs ─────────────────────────────────────────────── */
-.nav-tabs { display: flex; gap: 4px; }
+.nav-tabs { display: flex; gap: 4px; flex: 1; justify-content: center; }
 
 .nav-tab {
   background: transparent;
@@ -67,6 +138,104 @@ body {
 .nav-tab:hover { background: rgba(255,255,255,0.1); color: #fff; }
 .nav-tab.active { background: rgba(255,255,255,0.2); color: #fff; font-weight: 600; }
 
+/* ─── Options button & panel ───────────────────────────────── */
+.options-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.options-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.7);
+  font-size: 18px;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.options-btn:hover,
+.options-btn.active {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+}
+
+.options-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: #fff;
+  border: 1px solid #dde2ee;
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+  min-width: 200px;
+  padding: 8px 0;
+  z-index: 200;
+}
+
+[data-theme="dark"] .options-panel {
+  background: #1a1e2e;
+  border-color: #252d40;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+}
+
+.option-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  gap: 16px;
+}
+
+.option-label {
+  font-size: 14px;
+  color: var(--color-text);
+  user-select: none;
+}
+
+/* ─── Toggle スイッチ ───────────────────────────────────────── */
+.toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  background: #ccc;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s;
+  padding: 0;
+}
+
+.toggle.on {
+  background: #003087;
+}
+
+[data-theme="dark"] .toggle.on {
+  background: #6aa0e0;
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s;
+  pointer-events: none;
+}
+
+.toggle.on .toggle-thumb {
+  transform: translateX(20px);
+}
+
 /* ─── Main Content ─────────────────────────────────────────── */
 .app-main {
   flex: 1;
@@ -78,19 +247,20 @@ body {
 
 /* ─── Section ──────────────────────────────────────────────── */
 .section {
-  background: #fff;
+  background: var(--bg-section);
   border-radius: 10px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
   padding: 20px;
+  transition: background 0.2s;
 }
 
 .section-title {
   font-size: 17px;
   font-weight: 700;
   margin-bottom: 16px;
-  color: #1a1a2e;
+  color: var(--color-heading);
   padding-bottom: 10px;
-  border-bottom: 2px solid #e8e8f0;
+  border-bottom: 2px solid var(--border-section);
 }
 
 /* ─── Tab Bar ──────────────────────────────────────────────── */
@@ -104,22 +274,22 @@ body {
 .tab-btn {
   padding: 6px 16px;
   border-radius: 20px;
-  border: 1.5px solid #ccc;
-  background: #fff;
-  color: #555;
+  border: 1.5px solid var(--border-tab);
+  background: var(--bg-tab);
+  color: var(--color-tab);
   cursor: pointer;
   font-family: inherit;
   font-size: 13px;
   transition: all 0.15s;
 }
 
-.tab-btn:hover { border-color: #666; color: #222; }
+.tab-btn:hover { border-color: #666; color: var(--color-text); }
 
 .tab-btn.active {
-  border-color: #003087;
-  color: #003087;
+  border-color: var(--border-tab-active);
+  color: var(--color-tab-active);
   font-weight: 600;
-  background: #f0f4ff;
+  background: var(--bg-tab-active);
 }
 
 .controls-row {
@@ -133,7 +303,7 @@ body {
 .table-wrapper {
   overflow-x: auto;
   border-radius: 6px;
-  border: 1px solid #e0e4ef;
+  border: 1px solid var(--border-table);
 }
 
 .standings-table,
@@ -159,16 +329,17 @@ body {
 .stats-table tbody td {
   padding: 8px 12px;
   text-align: center;
-  border-bottom: 1px solid #eef0f7;
+  border-bottom: 1px solid var(--border-row);
+  color: var(--color-text);
 }
 
-.row-even { background: #fff; }
-.row-odd  { background: #f8f9ff; }
+.row-even { background: var(--bg-row-even); }
+.row-odd  { background: var(--bg-row-odd); }
 
 .standings-table tbody tr:hover,
-.stats-table tbody tr:hover { background: #eef4ff; }
+.stats-table tbody tr:hover { background: var(--bg-row-hover); }
 
-.rank { font-weight: 700; color: #003087; width: 40px; }
+.rank { font-weight: 700; color: var(--color-rank); width: 40px; }
 
 .team-cell {
   display: flex !important;
@@ -184,16 +355,16 @@ body {
 .status-msg {
   text-align: center;
   padding: 40px;
-  color: #888;
+  color: var(--color-status);
   font-size: 15px;
 }
 
 .error-msg {
-  background: #fff5f5;
-  border: 1px solid #ffcccc;
+  background: var(--bg-error);
+  border: 1px solid var(--border-error);
   border-radius: 6px;
   padding: 14px 18px;
-  color: #c0392b;
+  color: var(--color-error);
   font-size: 13px;
   line-height: 1.7;
 }
@@ -202,8 +373,9 @@ body {
 .app-footer {
   text-align: center;
   padding: 16px;
-  color: #999;
+  color: var(--color-footer);
   font-size: 12px;
-  border-top: 1px solid #e4e8f0;
-  background: #fff;
+  border-top: 1px solid var(--border-footer);
+  background: var(--bg-footer);
+  transition: background 0.2s, border-color 0.2s;
 }
