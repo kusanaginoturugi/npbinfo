@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { TEAMS, getContrastColor } from '../data/teams';
 
 const LEAGUES = [
   { key: 'cl', label: 'セントラル・リーグ', color: '#003087' },
@@ -6,35 +7,18 @@ const LEAGUES = [
   { key: 'cp', label: 'セ・パ交流戦', color: '#2d6a2d' },
 ];
 
-const TEAM_INFO = {
-  // セ・リーグ
-  'ヤクルト':     { code: 'S',  color: '#073180' },  // 東京ヤクルトスワローズ
-  '阪神':         { code: 'T',  color: '#000000' },  // 阪神タイガース
-  '巨人':         { code: 'G',  color: '#f97709' },  // 読売ジャイアンツ
-  'DeNA':         { code: 'DB', color: '#00345d' },  // 横浜DeNAベイスターズ
-  '横浜DeNA':     { code: 'DB', color: '#00345d' },
-  '広島':         { code: 'C',  color: '#e50012' },  // 広島東洋カープ
-  '中日':         { code: 'D',  color: '#002856' },  // 中日ドラゴンズ
-  // パ・リーグ
-  'ソフトバンク': { code: 'H',  color: '#1a1a1a' },  // 福岡ソフトバンクホークス
-  '日本ハム':     { code: 'F',  color: '#003087' },  // 北海道日本ハムファイターズ
-  '楽天':         { code: 'E',  color: '#870116' },  // 東北楽天ゴールデンイーグルス
-  'ロッテ':       { code: 'M',  color: '#231f20' },  // 千葉ロッテマリーンズ
-  'オリックス':   { code: 'B',  color: '#8f1417' },  // オリックス・バファローズ
-  '西武':         { code: 'L',  color: '#1b4497' },  // 埼玉西武ライオンズ
-};
-
 function TeamBadge({ name }) {
-  const info = TEAM_INFO[name];
-  const color = info?.color ?? '#555';
+  const info = TEAMS[name];
+  const bg = info?.colors?.[0] ?? '#555';
   const code = info?.code ?? (name || '?').slice(0, 2);
   return (
     <span
       style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        width: 28, height: 28, borderRadius: '50%', background: color,
-        color: '#fff', fontSize: 11, fontWeight: 700, marginRight: 8,
-        flexShrink: 0, letterSpacing: '-0.5px',
+        width: 28, height: 28, borderRadius: '50%', background: bg,
+        color: getContrastColor(bg), fontSize: 11, fontWeight: 700,
+        marginRight: 8, flexShrink: 0, letterSpacing: '-0.5px',
+        border: '1px solid rgba(0,0,0,0.08)',
       }}
     >
       {code}
