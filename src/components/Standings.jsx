@@ -91,40 +91,66 @@ function StandingsTable({ data }) {
 
 export default function Standings() {
   const [activeLeague, setActiveLeague] = useState('cl');
+  const [year, setYear] = useState(new Date().getFullYear());
   const [data, setData] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const cacheKey = `${activeLeague}:${year}`;
+
   useEffect(() => {
-    if (data[activeLeague]) return;
+    if (data[cacheKey]) return;
     setLoading(true);
     setError(null);
-    fetch(`/api/standings/${activeLeague}`)
+    fetch(`/api/standings/${activeLeague}?year=${year}`)
       .then(r => r.json())
       .then(json => {
         if (json.error) throw new Error(json.error);
-        setData(prev => ({ ...prev, [activeLeague]: json }));
+        setData(prev => ({ ...prev, [cacheKey]: json }));
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [activeLeague, data]);
+  }, [activeLeague, year, data, cacheKey]);
 
   const activeInfo = LEAGUES.find(l => l.key === activeLeague);
+
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 12 }, (_, i) => currentYear - i);
 
   return (
     <section className="section">
       <h2 className="section-title">順位表</h2>
-      <div className="tab-bar">
-        {LEAGUES.map(l => (
-          <button
-            key={l.key}
-            className={`tab-btn ${activeLeague === l.key ? 'active' : ''}`}
-            style={activeLeague === l.key ? { borderColor: l.color, color: l.color } : {}}
-            onClick={() => setActiveLeague(l.key)}
-          >
-            {l.label}
-          </button>
-        ))}
+      <div style={{ display: 'flex', gap: '16px', marginBottom: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="tab-bar">
+          {LEAGUES.map(l => (
+            <button
+              key={l.key}
+              className={`tab-btn ${activeLeague === l.key ? 'active' : ''}`}
+              style={activeLeague === l.key ? { borderColor: l.color, color: l.color } : {}}
+              onClick={() => setActiveLeague(l.key)}
+            >
+              {l.label}
+            </button>
+          ))}
+        </div>
+        <select
+          value={year}
+          onChange={(e) => setYear(parseInt(e.target.value, 10))}
+          style={{
+            padding: '6px 12px',
+            borderRadius: '6px',
+            border: '1.5px solid #ccc',
+            background: '#fff',
+            color: '#555',
+            fontFamily: 'inherit',
+            fontSize: '13px',
+            cursor: 'pointer',
+          }}
+        >
+          {years.map(y => (
+            <option key={y} value={y}>{y}年</option>
+          ))}
+        </select>
       </div>
 
       {loading && <div className="status-msg">読み込み中...</div>}
@@ -135,8 +161,8 @@ export default function Standings() {
           <small>しばらく待ってから再読み込みしてみてください。</small>
         </div>
       )}
-      {!loading && !error && data[activeLeague] && (
-        <StandingsTable data={Array.isArray(data[activeLeague]) ? data[activeLeague] : data[activeLeague].teams ?? []} />
+      {!loading && !error && data[cacheKey] && (
+        <StandingsTable data={Array.isArray(data[cacheKey]) ? data[cacheKey] : data[cacheKey].teams ?? []} />
       )}
     </section>
   );

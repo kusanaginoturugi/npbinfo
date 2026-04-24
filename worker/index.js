@@ -3,12 +3,19 @@
 // - /api/stats/:type/:league  → npb.jp HTMLRewriter スクレイピング
 // - その他                    → dist/ の静的アセットを返す
 
-const YEAR = new Date().getFullYear();
+const CURRENT_YEAR = new Date().getFullYear();
+const AVAILABLE_YEARS = Array.from({ length: 12 }, (_, i) => CURRENT_YEAR - i).reverse();
+
+function getYear(url) {
+  const year = new URL(url).searchParams.get('year');
+  const parsed = year ? parseInt(year, 10) : CURRENT_YEAR;
+  return AVAILABLE_YEARS.includes(parsed) ? parsed : CURRENT_YEAR;
+}
 
 // ─── 順位表 ──────────────────────────────────────────────────
 const VALID_LEAGUES = new Set(['cl', 'pl', 'cp', 'op']);
 
-async function handleStandings(league) {
+async function handleStandings(league, request) {
   if (!VALID_LEAGUES.has(league)) {
     return new Response('Not Found', { status: 404 });
   }
@@ -92,14 +99,15 @@ function buildRewriter(players, fields) {
     });
 }
 
-async function handleStats(type, league) {
+async function handleStats(type, league, request) {
   if (!['batting', 'pitching'].includes(type) || !['cl', 'pl'].includes(league)) {
     return new Response('Not Found', { status: 404 });
   }
 
+  const year = getYear(request.url);
   const leagueCode = league === 'cl' ? 'c' : 'p';
   const prefix = type === 'batting' ? 'bat' : 'pit';
-  const url = `https://npb.jp/bis/${YEAR}/stats/${prefix}_${leagueCode}.html`;
+  const url = `https://npb.jp/bis/${year}/stats/${prefix}_${leagueCode}.html`;
   const fields = type === 'batting' ? BATTING_FIELDS : PITCHING_FIELDS;
 
   try {
@@ -114,7 +122,7 @@ async function handleStats(type, league) {
     const players = [];
     await buildRewriter(players, fields).transform(res).text();
 
-    return Response.json({ league, type, year: YEAR, players });
+    return Response.json({ league, type, year, players });
   } catch (err) {
     return Response.json(
       { error: 'データの取得に失敗しました', detail: err.message },
@@ -129,14 +137,14 @@ export default {
     const url = new URL(request.url);
     const segments = url.pathname.split('/').filter(Boolean);
 
-    // /api/standings/:league
+    // /api/standings/:league?year=YYYY
     if (segments[0] === 'api' && segments[1] === 'standings' && segments[2]) {
-      return handleStandings(segments[2]);
+      return handleStandings(segments[2], request);
     }
 
-    // /api/stats/:type/:league
+    // /api/stats/:type/:league?year=YYYY
     if (segments[0] === 'api' && segments[1] === 'stats' && segments[2] && segments[3]) {
-      return handleStats(segments[2], segments[3]);
+      return handleStats(segments[2], segments[3], request);
     }
 
     // その他は dist/ の静的アセット（Workers Static Assets）

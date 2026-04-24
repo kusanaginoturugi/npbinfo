@@ -79,17 +79,18 @@ function StatsTable({ players, type }) {
 export default function PlayerStats() {
   const [league, setLeague] = useState('cl');
   const [type, setType] = useState('batting');
+  const [year, setYear] = useState(new Date().getFullYear());
   const [cache, setCache] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const cacheKey = `${type}-${league}`;
+  const cacheKey = `${type}-${league}-${year}`;
 
   useEffect(() => {
     if (cache[cacheKey]) return;
     setLoading(true);
     setError(null);
-    fetch(`/api/stats/${type}/${league}`)
+    fetch(`/api/stats/${type}/${league}?year=${year}`)
       .then(r => r.json())
       .then(json => {
         if (json.error) throw new Error(json.error);
@@ -97,7 +98,10 @@ export default function PlayerStats() {
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [cacheKey, cache]);
+  }, [cacheKey, cache, type, league, year]);
+
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 12 }, (_, i) => currentYear - i);
 
   return (
     <section className="section">
@@ -125,6 +129,24 @@ export default function PlayerStats() {
             </button>
           ))}
         </div>
+        <select
+          value={year}
+          onChange={(e) => setYear(parseInt(e.target.value, 10))}
+          style={{
+            padding: '6px 12px',
+            borderRadius: '6px',
+            border: '1.5px solid #ccc',
+            background: '#fff',
+            color: '#555',
+            fontFamily: 'inherit',
+            fontSize: '13px',
+            cursor: 'pointer',
+          }}
+        >
+          {years.map(y => (
+            <option key={y} value={y}>{y}年</option>
+          ))}
+        </select>
       </div>
 
       {loading && <div className="status-msg">読み込み中...</div>}
