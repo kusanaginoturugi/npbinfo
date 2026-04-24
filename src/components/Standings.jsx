@@ -110,7 +110,6 @@ export default function Standings() {
             <button
               key={l.key}
               className={`tab-btn ${activeLeague === l.key ? 'active' : ''}`}
-              style={activeLeague === l.key ? { borderColor: l.color, color: l.color } : {}}
               onClick={() => setActiveLeague(l.key)}
             >
               {l.label}
