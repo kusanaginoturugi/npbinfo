@@ -56,19 +56,19 @@ function StandingsTable({ data }) {
             <tr key={i} className={i % 2 === 0 ? 'row-even' : 'row-odd'}>
               <td className="rank">{row.rank ?? i + 1}</td>
               <td className="team-cell">
-                <TeamBadge name={row.team ?? row.teamName ?? ''} />
-                {row.team ?? row.teamName ?? '-'}
+                <TeamBadge name={row.name ?? ''} />
+                {row.name ?? '-'}
               </td>
-              <td>{row.games ?? row.game ?? '-'}</td>
+              <td>{row.playGameCount ?? '-'}</td>
               <td>{row.win ?? '-'}</td>
               <td>{row.lose ?? '-'}</td>
               <td>{row.draw ?? '-'}</td>
-              <td>{row.pct ?? row.winningPercentage ?? '-'}</td>
-              <td>{row.gb ?? row.gameBehind ?? '-'}</td>
-              <td>{row.avg ?? row.battingAverage ?? '-'}</td>
-              <td>{row.era ?? row.earnedRunAverage ?? '-'}</td>
-              <td>{row.hr ?? row.homerun ?? '-'}</td>
-              <td>{row.sb ?? row.stolenBase ?? '-'}</td>
+              <td>{row.pct ?? '-'}</td>
+              <td>{row.gamesBehind ?? '-'}</td>
+              <td>{row.avg ?? '-'}</td>
+              <td>{row.era ?? '-'}</td>
+              <td>{row.hr ?? '-'}</td>
+              <td>{row.sb ?? '-'}</td>
             </tr>
           ))}
         </tbody>
@@ -120,7 +120,7 @@ export default function Standings() {
         <div className="error-msg">
           <strong>取得エラー:</strong> {error}
           <br />
-          <small>バックエンドサーバー (localhost:3001) が起動しているか確認してください。</small>
+          <small>しばらく待ってから再読み込みしてみてください。</small>
         </div>
       )}
       {!loading && !error && data[activeLeague] && (
