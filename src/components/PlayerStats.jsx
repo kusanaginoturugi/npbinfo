@@ -22,7 +22,6 @@ const BATTING_COLS = [
   { key: 'sb', label: '盗塁' },
   { key: 'obp', label: '出塁率' },
   { key: 'slg', label: '長打率' },
-  { key: 'ops', label: 'OPS' },
 ];
 
 const PITCHING_COLS = [
@@ -83,6 +82,7 @@ export default function PlayerStats() {
   const [cache, setCache] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [errorDetail, setErrorDetail] = useState(null);
 
   const cacheKey = `${type}-${league}-${year}`;
 
@@ -90,13 +90,20 @@ export default function PlayerStats() {
     if (cache[cacheKey]) return;
     setLoading(true);
     setError(null);
+    setErrorDetail(null);
     fetch(`/api/stats/${type}/${league}?year=${year}`)
       .then(r => r.json())
       .then(json => {
-        if (json.error) throw new Error(json.error);
+        if (json.error) {
+          setError(json.error);
+          setErrorDetail(json.detail);
+          return;
+        }
         setCache(prev => ({ ...prev, [cacheKey]: json.players ?? [] }));
       })
-      .catch(e => setError(e.message))
+      .catch(e => {
+        setError(e.message);
+      })
       .finally(() => setLoading(false));
   }, [cacheKey, cache, type, league, year]);
 
@@ -153,8 +160,14 @@ export default function PlayerStats() {
       {error && (
         <div className="error-msg">
           <strong>取得エラー:</strong> {error}
-          <br />
-          <small>バックエンドサーバーが起動しているか確認してください。</small>
+          {errorDetail && (
+            <div style={{ marginTop: '4px', fontSize: '11px', opacity: 0.8, fontStyle: 'italic' }}>
+              {errorDetail}
+            </div>
+          )}
+          <div style={{ marginTop: '8px', fontSize: '11px' }}>
+            バックエンドサーバーが起動しているか確認してください。
+          </div>
         </div>
       )}
       {!loading && !error && cache[cacheKey] && (

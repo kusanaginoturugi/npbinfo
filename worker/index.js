@@ -36,16 +36,17 @@ async function handleStandings(league, request) {
 }
 
 // ─── 選手成績 ─────────────────────────────────────────────────
+// 2026年度以降のテーブル構造に対応
 const BATTING_FIELDS = {
-  0: 'rank', 1: 'name', 2: 'team', 3: 'games',
-  4: 'avg', 6: 'hits', 10: 'hr', 11: 'rbi',
-  16: 'sb', 20: 'obp', 21: 'slg', 22: 'ops',
+  0: 'rank', 1: 'name_raw', 2: 'avg', 3: 'games',
+  7: 'hits', 10: 'hr', 12: 'rbi', 13: 'sb',
+  22: 'slg', 23: 'obp',
 };
 
 const PITCHING_FIELDS = {
-  0: 'rank', 1: 'name', 2: 'team', 3: 'era',
-  4: 'games', 7: 'wins', 8: 'losses', 10: 'saves',
-  11: 'holds', 13: 'ip', 16: 'so', 22: 'whip',
+  0: 'rank', 1: 'name_raw', 2: 'era', 3: 'games',
+  4: 'wins', 5: 'losses', 6: 'saves',
+  14: 'ip', 20: 'so',
 };
 
 function mapCells(cells, fields) {
@@ -53,6 +54,20 @@ function mapCells(cells, fields) {
   for (const [idx, field] of Object.entries(fields)) {
     obj[field] = cells[idx] ?? '-';
   }
+  
+  // 名前とチームの分離 (例: "佐藤　輝明(神)" -> name: "佐藤　輝明", team: "神")
+  if (obj.name_raw) {
+    const match = obj.name_raw.match(/^(.*?)\((.*?)\)$/);
+    if (match) {
+      obj.name = match[1].trim();
+      obj.team = match[2].trim();
+    } else {
+      obj.name = obj.name_raw;
+      obj.team = '-';
+    }
+    delete obj.name_raw;
+  }
+  
   return obj;
 }
 
@@ -65,7 +80,8 @@ function buildRewriter(players, fields) {
   return new HTMLRewriter()
     .on('table', {
       element(el) {
-        inTable = (el.getAttribute('class') ?? '').includes('NpbSt');
+        const className = el.getAttribute('class') ?? '';
+        inTable = className.includes('NpbSt') || className.includes('tablefix2');
         if (inTable) rowIndex = 0;
         el.onEndTag(() => { inTable = false; });
       },
@@ -76,6 +92,7 @@ function buildRewriter(players, fields) {
         cells = [];
         el.onEndTag(() => {
           if (!inTable) return;
+          // ヘッダー行 (rowIndex 0) をスキップ
           if (rowIndex > 0 && cells.length >= 4 && cells[1]) {
             players.push(mapCells(cells, fields));
           }

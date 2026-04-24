@@ -54,24 +54,26 @@ app.get('/api/stats/batting/:league', async (req, res) => {
     const rows = [];
 
     // npb.jp の成績テーブルを解析（ヘッダー行をスキップ）
-    $('table.NpbSt').first().find('tr').each((i, tr) => {
+    $('table.tablefix2, table.NpbSt').first().find('tr').each((i, tr) => {
       if (i === 0) return; // ヘッダーをスキップ
       const cells = $(tr).find('td');
       if (cells.length < 5) return;
 
+      const nameRaw = $(cells[1]).text().trim();
+      const match = nameRaw.match(/^(.*?)\((.*?)\)$/);
+      
       const row = {
         rank: $(cells[0]).text().trim(),
-        name: $(cells[1]).text().trim(),
-        team: $(cells[2]).text().trim(),
+        name: match ? match[1].trim() : nameRaw,
+        team: match ? match[2].trim() : '-',
+        avg: $(cells[2]).text().trim(),
         games: $(cells[3]).text().trim(),
-        avg: $(cells[4]).text().trim(),
-        hits: $(cells[6])?.text().trim() ?? '-',
+        hits: $(cells[7])?.text().trim() ?? '-',
         hr: $(cells[10])?.text().trim() ?? '-',
-        rbi: $(cells[11])?.text().trim() ?? '-',
-        sb: $(cells[16])?.text().trim() ?? '-',
-        obp: $(cells[20])?.text().trim() ?? '-',
-        slg: $(cells[21])?.text().trim() ?? '-',
-        ops: $(cells[22])?.text().trim() ?? '-',
+        rbi: $(cells[12])?.text().trim() ?? '-',
+        sb: $(cells[13])?.text().trim() ?? '-',
+        slg: $(cells[22])?.text().trim() ?? '-',
+        obp: $(cells[23])?.text().trim() ?? '-',
       };
       if (row.name) rows.push(row);
     });
@@ -91,24 +93,27 @@ app.get('/api/stats/pitching/:league', async (req, res) => {
     const $ = await scrapeNpbStats(url);
     const rows = [];
 
-    $('table.NpbSt').first().find('tr').each((i, tr) => {
+    $('table.tablefix2, table.NpbSt').first().find('tr').each((i, tr) => {
       if (i === 0) return;
       const cells = $(tr).find('td');
       if (cells.length < 5) return;
 
+      const nameRaw = $(cells[1]).text().trim();
+      const match = nameRaw.match(/^(.*?)\((.*?)\)$/);
+
       const row = {
         rank: $(cells[0]).text().trim(),
-        name: $(cells[1]).text().trim(),
-        team: $(cells[2]).text().trim(),
-        era: $(cells[3]).text().trim(),
-        games: $(cells[4]).text().trim(),
-        wins: $(cells[7])?.text().trim() ?? '-',
-        losses: $(cells[8])?.text().trim() ?? '-',
-        saves: $(cells[10])?.text().trim() ?? '-',
-        holds: $(cells[11])?.text().trim() ?? '-',
-        ip: $(cells[13])?.text().trim() ?? '-',
-        so: $(cells[16])?.text().trim() ?? '-',
-        whip: $(cells[22])?.text().trim() ?? '-',
+        name: match ? match[1].trim() : nameRaw,
+        team: match ? match[2].trim() : '-',
+        era: $(cells[2]).text().trim(),
+        games: $(cells[3]).text().trim(),
+        wins: $(cells[4])?.text().trim() ?? '-',
+        losses: $(cells[5])?.text().trim() ?? '-',
+        saves: $(cells[6])?.text().trim() ?? '-',
+        holds: '-', // 2026年版では列位置が不明なため一旦ハイフン
+        ip: $(cells[14])?.text().trim() ?? '-',
+        so: $(cells[20])?.text().trim() ?? '-',
+        whip: '-',
       };
       if (row.name) rows.push(row);
     });
