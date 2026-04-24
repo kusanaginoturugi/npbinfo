@@ -3,13 +3,23 @@
 // - /api/stats/:type/:league  → npb.jp HTMLRewriter スクレイピング
 // - その他                    → dist/ の静的アセットを返す
 
-const CURRENT_YEAR = new Date().getFullYear();
-const AVAILABLE_YEARS = Array.from({ length: 12 }, (_, i) => CURRENT_YEAR - i).reverse();
+// 年度取得用のヘルパー（リクエストのたびに計算する）
+function getCurrentYear() {
+  return new Date().getFullYear();
+}
+
+function getAvailableYears() {
+  const current = getCurrentYear();
+  return Array.from({ length: 12 }, (_, i) => current - i);
+}
 
 function getYear(url) {
+  const current = getCurrentYear();
+  const available = getAvailableYears();
   const year = new URL(url).searchParams.get('year');
-  const parsed = year ? parseInt(year, 10) : CURRENT_YEAR;
-  return AVAILABLE_YEARS.includes(parsed) ? parsed : CURRENT_YEAR;
+  const parsed = year ? parseInt(year, 10) : current;
+  // 解析に失敗した場合や範囲外の場合は current を返す
+  return !isNaN(parsed) && available.includes(parsed) ? parsed : current;
 }
 
 // ─── 順位表 ──────────────────────────────────────────────────
