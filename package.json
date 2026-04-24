@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"vite\" \"wrangler pages dev --proxy 5173 --port 8788\"",
+    "dev": "concurrently \"vite\" \"wrangler dev\"",
     "dev:node": "concurrently \"node server/index.js\" \"vite\"",
     "build": "vite build",
     "preview": "npm run build && wrangler dev",

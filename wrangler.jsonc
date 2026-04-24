@@ -1,14 +1,15 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "npbinfo",
+  "main": "worker/index.js",
   "compatibility_date": "2026-04-15",
-  "observability": {
-    "enabled": true
-  },
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "assets": {
     "not_found_handling": "single-page-application"
   },
-  "compatibility_flags": [
-    "nodejs_compat"
-  ]
+  "observability": {
+    "enabled": true
+  }
 }
