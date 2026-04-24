@@ -104,7 +104,7 @@ export default function Standings() {
   return (
     <section className="section">
       <h2 className="section-title">順位表</h2>
-      <div style={{ display: 'flex', gap: '16px', marginBottom: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="controls-row">
         <div className="tab-bar">
           {LEAGUES.map(l => (
             <button
@@ -120,16 +120,7 @@ export default function Standings() {
         <select
           value={year}
           onChange={(e) => setYear(parseInt(e.target.value, 10))}
-          style={{
-            padding: '6px 12px',
-            borderRadius: '6px',
-            border: '1.5px solid #ccc',
-            background: '#fff',
-            color: '#555',
-            fontFamily: 'inherit',
-            fontSize: '13px',
-            cursor: 'pointer',
-          }}
+          className="year-select"
         >
           {years.map(y => (
             <option key={y} value={y}>{y}年</option>

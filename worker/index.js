@@ -134,7 +134,9 @@ async function handleStats(type, league, request) {
         'Accept-Language': 'ja,en;q=0.9',
       },
     });
-    if (!res.ok) throw new Error(`npb.jp returned ${res.status}`);
+    if (!res.ok) {
+      throw new Error(`npb.jp returned ${res.status} for URL: ${url}`);
+    }
 
     const players = [];
     await buildRewriter(players, fields).transform(res).text();
