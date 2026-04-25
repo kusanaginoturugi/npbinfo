@@ -25,22 +25,100 @@ function getYear(url) {
 // ─── 順位表 ──────────────────────────────────────────────────
 const VALID_LEAGUES = new Set(['cl', 'pl', 'cp', 'op']);
 
+const STANDINGS_FIELDS = {
+  0: 'name', 1: 'playGameCount', 2: 'win', 3: 'lose',
+  4: 'draw', 5: 'pct', 6: 'gamesBehind',
+};
+
 async function handleStandings(league, request) {
   if (!VALID_LEAGUES.has(league)) {
     return new Response('Not Found', { status: 404 });
   }
+
   const year = getYear(request.url);
+
+  // 交流戦、オープン戦はとりあえず既存のAPI（過去年度未対応）を叩く
+  if (league === 'cp' || league === 'op') {
+    try {
+      const res = await fetch(
+        `https://npb-result.ant-npb.workers.dev/api/${league}?year=${year}`,
+        { headers: { 'User-Agent': 'npbinfo-app/1.0' } }
+      );
+      if (!res.ok) throw new Error(`upstream ${res.status}`);
+      const data = await res.json();
+      return Response.json(data);
+    } catch (err) {
+      return Response.json({ error: '取得エラー', detail: err.message }, { status: 502 });
+    }
+  }
+
+  // セ・パ リーグは npb.jp からスクレイピング
+  const leagueCode = league === 'cl' ? 'c' : 'p';
+  const url = `https://npb.jp/bis/${year}/stats/std_${leagueCode}.html`;
+
   try {
-    const res = await fetch(
-      `https://npb-result.ant-npb.workers.dev/api/${league}?year=${year}`,
-      { headers: { 'User-Agent': 'npbinfo-app/1.0' } }
-    );
-    if (!res.ok) throw new Error(`upstream ${res.status}`);
-    const data = await res.json();
-    return Response.json(data);
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+    });
+    if (!res.ok) throw new Error(`npb.jp returned ${res.status}`);
+
+    const teams = [];
+    let inTable = false;
+    let rowIndex = 0;
+    let cells = [];
+    let cellText = '';
+
+    await new HTMLRewriter()
+      .on('table', {
+        element(el) {
+          const className = el.getAttribute('class') ?? '';
+          inTable = className.includes('tablefix2');
+          if (inTable) rowIndex = 0;
+          el.onEndTag(() => { inTable = false; });
+        },
+      })
+      .on('tr', {
+        element(el) {
+          if (!inTable) return;
+          cells = [];
+          el.onEndTag(() => {
+            if (!inTable) return;
+            // ヘッダー行をスキップ。チーム名（インデックス0）があることを確認
+            if (rowIndex > 0 && cells.length >= 7 && cells[0] && !cells[0].includes('リーグ')) {
+              const team = {};
+              for (const [idx, field] of Object.entries(STANDINGS_FIELDS)) {
+                team[field] = cells[idx] ?? '-';
+              }
+              team.rank = rowIndex;
+              teams.push(team);
+            }
+            rowIndex++;
+          });
+        },
+      })
+      .on('td', {
+        element(el) {
+          if (!inTable) return;
+          cellText = '';
+          el.onEndTag(() => {
+            if (!inTable) return;
+            cells.push(cellText.trim());
+          });
+        },
+        text(chunk) {
+          if (!inTable) return;
+          cellText += chunk.text;
+        },
+      })
+      .transform(res)
+      .text();
+
+    return Response.json({ league, year, teams });
   } catch (err) {
     return Response.json(
-      { error: 'データの取得に失敗しました', detail: err.message },
+      { error: '順位表の取得に失敗しました', detail: err.message },
       { status: 502 }
     );
   }
