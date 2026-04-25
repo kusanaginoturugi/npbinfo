@@ -29,9 +29,10 @@ async function handleStandings(league, request) {
   if (!VALID_LEAGUES.has(league)) {
     return new Response('Not Found', { status: 404 });
   }
+  const year = getYear(request.url);
   try {
     const res = await fetch(
-      `https://npb-result.ant-npb.workers.dev/api/${league}`,
+      `https://npb-result.ant-npb.workers.dev/api/${league}?year=${year}`,
       { headers: { 'User-Agent': 'npbinfo-app/1.0' } }
     );
     if (!res.ok) throw new Error(`upstream ${res.status}`);
