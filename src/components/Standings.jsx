@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { TEAMS, getContrastColor } from '../data/teams';
+import { useFavorites } from '../hooks/useFavorites';
 
 const LEAGUES = [
   { key: 'cl', label: 'セントラル・リーグ', color: '#003087' },
@@ -26,7 +27,22 @@ function TeamBadge({ name }) {
   );
 }
 
-function StandingsTable({ data }) {
+function FavoriteButton({ teamName, isFavorite, toggleFavorite }) {
+  return (
+    <button
+      className={`fav-btn ${isFavorite ? 'active' : ''}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        toggleFavorite(teamName);
+      }}
+      title={isFavorite ? 'お気に入りから外す' : 'お気に入りに追加'}
+    >
+      {isFavorite ? '★' : '☆'}
+    </button>
+  );
+}
+
+function StandingsTable({ data, isFavorite, toggleFavorite }) {
   if (!data?.length) return null;
   return (
     <div className="table-wrapper">
@@ -48,25 +64,38 @@ function StandingsTable({ data }) {
           </tr>
         </thead>
         <tbody>
-          {data.map((row, i) => (
-            <tr key={i} className={i % 2 === 0 ? 'row-even' : 'row-odd'}>
-              <td className="rank">{row.rank ?? i + 1}</td>
-              <td className="team-cell">
-                <TeamBadge name={row.name ?? ''} />
-                {row.name ?? '-'}
-              </td>
-              <td>{row.playGameCount ?? '-'}</td>
-              <td>{row.win ?? '-'}</td>
-              <td>{row.lose ?? '-'}</td>
-              <td>{row.draw ?? '-'}</td>
-              <td>{row.pct ?? '-'}</td>
-              <td>{row.gamesBehind ?? '-'}</td>
-              <td>{row.avg ?? '-'}</td>
-              <td>{row.era ?? '-'}</td>
-              <td>{row.hr ?? '-'}</td>
-              <td>{row.sb ?? '-'}</td>
-            </tr>
-          ))}
+          {data.map((row, i) => {
+            const teamName = row.name ?? '';
+            const favorited = isFavorite(teamName);
+            const rowClass = favorited 
+              ? 'row-favorite' 
+              : (i % 2 === 0 ? 'row-even' : 'row-odd');
+
+            return (
+              <tr key={i} className={rowClass}>
+                <td className="rank">{row.rank ?? i + 1}</td>
+                <td className="team-cell">
+                  <FavoriteButton 
+                    teamName={teamName} 
+                    isFavorite={favorited} 
+                    toggleFavorite={toggleFavorite} 
+                  />
+                  <TeamBadge name={teamName} />
+                  {teamName || '-'}
+                </td>
+                <td>{row.playGameCount ?? '-'}</td>
+                <td>{row.win ?? '-'}</td>
+                <td>{row.lose ?? '-'}</td>
+                <td>{row.draw ?? '-'}</td>
+                <td>{row.pct ?? '-'}</td>
+                <td>{row.gamesBehind ?? '-'}</td>
+                <td>{row.avg ?? '-'}</td>
+                <td>{row.era ?? '-'}</td>
+                <td>{row.hr ?? '-'}</td>
+                <td>{row.sb ?? '-'}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -79,6 +108,7 @@ export default function Standings() {
   const [data, setData] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const { isFavorite, toggleFavorite } = useFavorites();
 
   const cacheKey = `${activeLeague}:${year}`;
 
@@ -136,7 +166,11 @@ export default function Standings() {
         </div>
       )}
       {!loading && !error && data[cacheKey] && (
-        <StandingsTable data={Array.isArray(data[cacheKey]) ? data[cacheKey] : data[cacheKey].teams ?? []} />
+        <StandingsTable 
+          data={Array.isArray(data[cacheKey]) ? data[cacheKey] : data[cacheKey].teams ?? []} 
+          isFavorite={isFavorite}
+          toggleFavorite={toggleFavorite}
+        />
       )}
     </section>
   );

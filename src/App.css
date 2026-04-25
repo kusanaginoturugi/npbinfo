@@ -356,6 +356,9 @@ body {
 .row-even { background: var(--bg-row-even); }
 .row-odd  { background: var(--bg-row-odd); }
 
+.row-favorite { background: #fffde7 !important; }
+[data-theme="dark"] .row-favorite { background: #2d2d15 !important; }
+
 .standings-table tbody tr:hover,
 .stats-table tbody tr:hover { background: var(--bg-row-hover); }
 
@@ -366,10 +369,41 @@ body {
   align-items: center;
   text-align: left !important;
   font-weight: 600;
-  min-width: 120px;
+  min-width: 140px;
 }
 
+.fav-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  margin-right: 2px;
+  opacity: 0.2;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text);
+  border-radius: 4px;
+}
+
+.fav-btn:hover { opacity: 0.6; background: rgba(0,0,0,0.05); }
+.fav-btn.active { opacity: 1; color: #f1c40f; }
+[data-theme="dark"] .fav-btn:hover { background: rgba(255,255,255,0.1); }
+
 .player-name { font-weight: 600; }
+
+.filter-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--color-text);
+  cursor: pointer;
+  user-select: none;
+}
 
 /* ─── Status / Error ───────────────────────────────────────── */
 .status-msg {

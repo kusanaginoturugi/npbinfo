@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { TEAMS } from '../data/teams';
+import { useFavorites } from '../hooks/useFavorites';
 
 const LEAGUES = [
   { key: 'cl', label: 'セ・リーグ' },
@@ -106,6 +107,8 @@ export default function PlayerStats() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [errorDetail, setErrorDetail] = useState(null);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const { isFavorite } = useFavorites();
   
   // ソート設定: 初期状態は順位の昇順
   const [sortConfig, setSortConfig] = useState({ key: 'rank', direction: 'asc' });
@@ -141,7 +144,16 @@ export default function PlayerStats() {
   };
 
   const sortedPlayers = useMemo(() => {
-    const raw = cache[cacheKey] || [];
+    let raw = cache[cacheKey] || [];
+    
+    // お気に入りフィルタ
+    if (showFavoritesOnly) {
+      raw = raw.filter(p => {
+        const fullTeamName = TEAM_MAP[p.team] || p.team;
+        return isFavorite(fullTeamName);
+      });
+    }
+
     if (!sortConfig.key) return raw;
 
     return [...raw].sort((a, b) => {
@@ -163,7 +175,7 @@ export default function PlayerStats() {
         ? aVal.localeCompare(bVal, 'ja') 
         : bVal.localeCompare(aVal, 'ja');
     });
-  }, [cache, cacheKey, sortConfig]);
+  }, [cache, cacheKey, sortConfig, isFavorite, showFavoritesOnly]);
 
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 12 }, (_, i) => currentYear - i);
@@ -206,6 +218,15 @@ export default function PlayerStats() {
             <option key={y} value={y}>{y}年</option>
           ))}
         </select>
+
+        <label className="filter-control">
+          <input 
+            type="checkbox" 
+            checked={showFavoritesOnly}
+            onChange={(e) => setShowFavoritesOnly(e.target.checked)}
+          />
+          お気に入りチームのみ
+        </label>
       </div>
 
       {loading && <div className="status-msg">読み込み中...</div>}
