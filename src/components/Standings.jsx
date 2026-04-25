@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { TEAMS, getContrastColor } from '../data/teams';
 import { useFavorites } from '../hooks/useFavorites';
+import { apiCache } from '../utils/apiCache';
 
 const LEAGUES = [
   { key: 'cl', label: 'セントラル・リーグ', color: '#003087' },
@@ -108,19 +109,33 @@ export default function Standings() {
   const [data, setData] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState({});
   const { isFavorite, toggleFavorite } = useFavorites();
 
-  const cacheKey = `${activeLeague}:${year}`;
+  const cacheKey = `standings:${activeLeague}:${year}`;
 
   useEffect(() => {
     if (data[cacheKey]) return;
+
+    // 1. localStorage キャッシュをチェック
+    const cached = apiCache.get(cacheKey);
+    if (cached) {
+      setData(prev => ({ ...prev, [cacheKey]: cached.data }));
+      setLastUpdated(prev => ({ ...prev, [cacheKey]: cached.timestamp }));
+      return;
+    }
+
+    // 2. なければ API を叩く
     setLoading(true);
     setError(null);
     fetch(`/api/standings/${activeLeague}?year=${year}`)
       .then(r => r.json())
       .then(json => {
         if (json.error) throw new Error(json.error);
+        const now = Date.now();
         setData(prev => ({ ...prev, [cacheKey]: json }));
+        setLastUpdated(prev => ({ ...prev, [cacheKey]: now }));
+        apiCache.set(cacheKey, json, year);
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
@@ -130,6 +145,11 @@ export default function Standings() {
 
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 12 }, (_, i) => currentYear - i);
+
+  const formatTimestamp = (ts) => {
+    if (!ts) return '';
+    return new Date(ts).toLocaleString('ja-JP');
+  };
 
   return (
     <section className="section">
@@ -166,11 +186,18 @@ export default function Standings() {
         </div>
       )}
       {!loading && !error && data[cacheKey] && (
-        <StandingsTable 
-          data={Array.isArray(data[cacheKey]) ? data[cacheKey] : data[cacheKey].teams ?? []} 
-          isFavorite={isFavorite}
-          toggleFavorite={toggleFavorite}
-        />
+        <>
+          <StandingsTable 
+            data={Array.isArray(data[cacheKey]) ? data[cacheKey] : data[cacheKey].teams ?? []} 
+            isFavorite={isFavorite}
+            toggleFavorite={toggleFavorite}
+          />
+          {lastUpdated[cacheKey] && (
+            <div style={{ marginTop: '12px', fontSize: '11px', color: 'var(--color-footer)', textAlign: 'right' }}>
+              取得日時: {formatTimestamp(lastUpdated[cacheKey])}
+            </div>
+          )}
+        </>
       )}
     </section>
   );

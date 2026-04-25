@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { TEAMS } from '../data/teams';
 import { useFavorites } from '../hooks/useFavorites';
+import { apiCache } from '../utils/apiCache';
 
 const LEAGUES = [
   { key: 'cl', label: 'セ・リーグ' },
@@ -107,16 +108,27 @@ export default function PlayerStats() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [errorDetail, setErrorDetail] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState({});
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const { isFavorite } = useFavorites();
   
   // ソート設定: 初期状態は順位の昇順
   const [sortConfig, setSortConfig] = useState({ key: 'rank', direction: 'asc' });
 
-  const cacheKey = `${type}-${league}-${year}`;
+  const cacheKey = `stats:${type}-${league}-${year}`;
 
   useEffect(() => {
     if (cache[cacheKey]) return;
+
+    // 1. localStorage キャッシュをチェック
+    const cached = apiCache.get(cacheKey);
+    if (cached) {
+      setCache(prev => ({ ...prev, [cacheKey]: cached.data }));
+      setLastUpdated(prev => ({ ...prev, [cacheKey]: cached.timestamp }));
+      return;
+    }
+
+    // 2. なければ API を叩く
     setLoading(true);
     setError(null);
     setErrorDetail(null);
@@ -128,7 +140,11 @@ export default function PlayerStats() {
           setErrorDetail(json.detail);
           return;
         }
-        setCache(prev => ({ ...prev, [cacheKey]: json.players ?? [] }));
+        const now = Date.now();
+        const players = json.players ?? [];
+        setCache(prev => ({ ...prev, [cacheKey]: players }));
+        setLastUpdated(prev => ({ ...prev, [cacheKey]: now }));
+        apiCache.set(cacheKey, players, year);
       })
       .catch(e => {
         setError(e.message);
@@ -179,6 +195,11 @@ export default function PlayerStats() {
 
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 12 }, (_, i) => currentYear - i);
+
+  const formatTimestamp = (ts) => {
+    if (!ts) return '';
+    return new Date(ts).toLocaleString('ja-JP');
+  };
 
   return (
     <section className="section">
@@ -244,12 +265,19 @@ export default function PlayerStats() {
         </div>
       )}
       {!loading && !error && cache[cacheKey] && (
-        <StatsTable 
-          players={sortedPlayers} 
-          type={type} 
-          sortConfig={sortConfig}
-          onSort={handleSort}
-        />
+        <>
+          <StatsTable 
+            players={sortedPlayers} 
+            type={type} 
+            sortConfig={sortConfig}
+            onSort={handleSort}
+          />
+          {lastUpdated[cacheKey] && (
+            <div style={{ marginTop: '12px', fontSize: '11px', color: 'var(--color-footer)', textAlign: 'right' }}>
+              取得日時: {formatTimestamp(lastUpdated[cacheKey])}
+            </div>
+          )}
+        </>
       )}
     </section>
   );
