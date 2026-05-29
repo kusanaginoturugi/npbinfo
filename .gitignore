@@ -29,3 +29,8 @@ dist-ssr
 !.dev.vars.example
 .env*
 !.env.example
+
+# Local agent/session files
+.codex/
+.namagi_history.jsonl
+sessions/
