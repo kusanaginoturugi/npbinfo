@@ -66,6 +66,7 @@ async function handleStandings(league, request) {
 
     const teams = [];
     let inTable = false;
+    let firstStandingsTableDone = false;
     let rowIndex = 0;
     let cells = [];
     let cellText = '';
@@ -73,10 +74,15 @@ async function handleStandings(league, request) {
     await new HTMLRewriter()
       .on('table', {
         element(el) {
+          if (firstStandingsTableDone) return;
           const className = el.getAttribute('class') ?? '';
-          inTable = className.includes('tablefix2');
-          if (inTable) rowIndex = 0;
-          el.onEndTag(() => { inTable = false; });
+          if (!className.includes('tablefix2')) return;
+          inTable = true;
+          rowIndex = 0;
+          el.onEndTag(() => {
+            inTable = false;
+            firstStandingsTableDone = true;
+          });
         },
       })
       .on('tr', {
