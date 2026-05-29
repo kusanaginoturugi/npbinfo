@@ -1,7 +1,7 @@
 # npbinfo
 
 NPB（日本プロ野球）の順位表と選手成績を表示する Web アプリ。
-フロントは React + Vite、バックエンドは Cloudflare Workers（本番）と Node.js / Express（ローカル開発用）の二本立て。
+フロントは React + Vite、バックエンドは Cloudflare Workers。
 
 ## 機能
 
@@ -13,9 +13,7 @@ NPB（日本プロ野球）の順位表と選手成績を表示する Web アプ
 ## データソース
 
 - 順位表: [`npb-result`](https://npb-result.ant-npb.workers.dev) API（非公式 JSON プロキシ）
-- 選手成績: [npb.jp](https://npb.jp) の公式成績ページをスクレイピング
-  - Workers では `HTMLRewriter` で抽出
-  - Node サーバでは `cheerio` で抽出
+- 選手成績: [npb.jp](https://npb.jp) の公式成績ページを `HTMLRewriter` でスクレイピング
 
 ## 構成
 
@@ -23,10 +21,8 @@ NPB（日本プロ野球）の順位表と選手成績を表示する Web アプ
 src/                React アプリ本体
   components/       Standings, PlayerStats
   data/teams.js     チームコード/名称マッピング
-worker/index.js     Cloudflare Workers エントリ（本番 API + 静的配信）
-server/index.js     Node 用 Express サーバ（ローカル開発の代替）
+worker/index.js     Cloudflare Workers エントリ（API + 静的配信）
 public/             favicon など
-standalone.html     依存なしで開ける単体版 HTML
 wrangler.jsonc      Cloudflare Workers 設定
 vite.config.js      Vite + @cloudflare/vite-plugin
 ```
@@ -43,12 +39,6 @@ npm install
 
 ```sh
 npm run dev
-```
-
-Node + Express で代替する場合（`server/index.js` を `:3001` で起動）:
-
-```sh
-npm run dev:node
 ```
 
 ビルド:
@@ -75,17 +65,10 @@ npm run deploy
 
 ## API
 
-すべて Workers / Express の双方で同じパスを提供する。
-
 | メソッド | パス | 説明 |
 | --- | --- | --- |
 | GET | `/api/standings/:league` | 順位表。`league` は `cl` / `pl` / `cp` / `op` |
 | GET | `/api/stats/batting/:league?year=YYYY` | 打撃成績。`league` は `cl` / `pl` |
 | GET | `/api/stats/pitching/:league?year=YYYY` | 投手成績。`league` は `cl` / `pl` |
-| GET | `/api/health` | ヘルスチェック（Express のみ） |
 
 `year` 省略時は当年。指定可能なのは直近 12 年。
-
-## standalone.html
-
-ビルドや Node を使わずブラウザだけで動く単体版。動作確認用。
