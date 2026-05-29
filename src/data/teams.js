@@ -91,6 +91,26 @@ export const TEAMS = {
   },
 };
 
+// 短縮名・公式名称どちらでもチーム情報を返す
+export function getTeamInfo(name) {
+  if (!name) return null;
+  if (TEAMS[name]) return TEAMS[name];
+
+  return Object.values(TEAMS).find((info) => info.official === name) ?? null;
+}
+
+// お気に入りなどのストレージ用キーを短縮名に揃える
+export function normalizeTeamName(name) {
+  if (!name) return name;
+  if (TEAMS[name]) return name;
+
+  for (const [shortName, info] of Object.entries(TEAMS)) {
+    if (info.official === name) return shortName;
+  }
+
+  return name;
+}
+
 // 背景色の明るさに応じて読みやすい文字色を返す
 export function getContrastColor(hex) {
   const c = hex.replace('#', '');

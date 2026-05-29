@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TEAMS, getContrastColor } from '../data/teams';
+import { getContrastColor, getTeamInfo } from '../data/teams';
 import { useFavorites } from '../hooks/useFavorites';
 import { apiCache } from '../utils/apiCache';
 
@@ -10,7 +10,7 @@ const LEAGUES = [
 ];
 
 function TeamBadge({ name }) {
-  const info = TEAMS[name];
+  const info = getTeamInfo(name);
   const bg = info?.colors?.[0] ?? '#555';
   const code = info?.code ?? (name || '?').slice(0, 2);
   return (
@@ -19,7 +19,7 @@ function TeamBadge({ name }) {
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         width: 28, height: 28, borderRadius: '50%', background: bg,
         color: getContrastColor(bg), fontSize: 11, fontWeight: 700,
-        marginRight: 8, flexShrink: 0, letterSpacing: '-0.5px',
+        marginRight: 8, flexShrink: 0, letterSpacing: 0,
         border: '1px solid rgba(0,0,0,0.08)',
       }}
     >

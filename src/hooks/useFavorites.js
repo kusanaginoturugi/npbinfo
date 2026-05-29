@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { normalizeTeamName } from '../data/teams';
 
 const STORAGE_KEY = 'npbinfo_favorites';
 
@@ -6,7 +7,8 @@ export function useFavorites() {
   const [favorites, setFavorites] = useState(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      return stored ? JSON.parse(stored) : [];
+      const parsed = stored ? JSON.parse(stored) : [];
+      return Array.from(new Set(parsed.map(normalizeTeamName)));
     } catch (e) {
       console.error('Failed to load favorites from localStorage:', e);
       return [];
@@ -18,16 +20,17 @@ export function useFavorites() {
   }, [favorites]);
 
   const toggleFavorite = useCallback((teamName) => {
-    if (!teamName) return;
+    const normalizedName = normalizeTeamName(teamName);
+    if (!normalizedName) return;
     setFavorites((prev) =>
-      prev.includes(teamName)
-        ? prev.filter((t) => t !== teamName)
-        : [...prev, teamName]
+      prev.includes(normalizedName)
+        ? prev.filter((t) => t !== normalizedName)
+        : [...prev, normalizedName]
     );
   }, []);
 
   const isFavorite = useCallback((teamName) => {
-    return favorites.includes(teamName);
+    return favorites.includes(normalizeTeamName(teamName));
   }, [favorites]);
 
   return { favorites, toggleFavorite, isFavorite };
