@@ -67,6 +67,8 @@ function StandingsTable({ data, isFavorite, toggleFavorite }) {
         <tbody>
           {data.map((row, i) => {
             const teamName = row.name ?? '';
+            const teamInfo = getTeamInfo(teamName);
+            const displayName = teamInfo?.official ?? teamName;
             const favorited = isFavorite(teamName);
             const rowClass = favorited 
               ? 'row-favorite' 
@@ -82,7 +84,7 @@ function StandingsTable({ data, isFavorite, toggleFavorite }) {
                     toggleFavorite={toggleFavorite} 
                   />
                   <TeamBadge name={teamName} />
-                  {teamName || '-'}
+                  {displayName || '-'}
                 </td>
                 <td>{row.playGameCount ?? '-'}</td>
                 <td>{row.win ?? '-'}</td>
