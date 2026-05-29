@@ -1,12 +1,13 @@
 # npbinfo
 
-NPB（日本プロ野球）の順位表と選手成績を表示する Web アプリ。
+NPB（日本プロ野球）の順位表、選手成績、試合日程を表示する Web アプリ。
 フロントは React + Vite、バックエンドは Cloudflare Workers。
 
 ## 機能
 
 - 順位表（セ・リーグ / パ・リーグ / 交流戦 / オープン戦）
 - 選手成績（打撃 / 投手）の一覧表示・列ソート
+- 試合日程・結果（日付ごとのカード一覧）
 - ダークモード切り替え
 - 年度切り替え（直近 12 年分）
 
@@ -14,12 +15,13 @@ NPB（日本プロ野球）の順位表と選手成績を表示する Web アプ
 
 - 順位表: [`npb-result`](https://npb-result.ant-npb.workers.dev) API（非公式 JSON プロキシ）
 - 選手成績: [npb.jp](https://npb.jp) の公式成績ページを `HTMLRewriter` でスクレイピング
+- 試合日程: [npb.jp](https://npb.jp) の月別日程ページを `HTMLRewriter` でスクレイピング
 
 ## 構成
 
 ```
 src/                React アプリ本体
-  components/       Standings, PlayerStats
+  components/       Standings, PlayerStats, Schedule
   data/teams.js     チームコード/名称マッピング
 worker/index.js     Cloudflare Workers エントリ（API + 静的配信）
 public/             favicon など
@@ -70,5 +72,6 @@ npm run deploy
 | GET | `/api/standings/:league` | 順位表。`league` は `cl` / `pl` / `cp` / `op` |
 | GET | `/api/stats/batting/:league?year=YYYY` | 打撃成績。`league` は `cl` / `pl` |
 | GET | `/api/stats/pitching/:league?year=YYYY` | 投手成績。`league` は `cl` / `pl` |
+| GET | `/api/schedule/YYYY-MM` | 月別の試合日程・結果 |
 
 `year` 省略時は当年。指定可能なのは直近 12 年。

@@ -23,11 +23,11 @@ export const apiCache = {
     }
   },
 
-  set(key, data, year) {
+  set(key, data, year, ttlOverride) {
     try {
       const currentYear = new Date().getFullYear();
       // 過去年度なら長いTTL、今年度ならデフォルトのTTL
-      const ttl = year < currentYear ? PAST_YEAR_TTL : DEFAULT_TTL;
+      const ttl = ttlOverride ?? (year < currentYear ? PAST_YEAR_TTL : DEFAULT_TTL);
 
       const cacheData = {
         data,

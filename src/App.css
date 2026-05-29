@@ -405,6 +405,133 @@ body {
   user-select: none;
 }
 
+/* ─── Schedule ─────────────────────────────────────────────── */
+.schedule-list {
+  display: grid;
+  gap: 10px;
+}
+
+.schedule-card {
+  border: 1px solid var(--border-table);
+  border-radius: 6px;
+  background: var(--bg-row-even);
+  padding: 12px;
+}
+
+[data-theme="dark"] .schedule-card {
+  background: var(--bg-row-odd);
+}
+
+.schedule-match {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.schedule-team {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.schedule-team span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-team-away {
+  justify-content: flex-end;
+}
+
+.schedule-team-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+.schedule-score,
+.schedule-time {
+  min-width: 72px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.schedule-score {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  font-size: 18px;
+}
+
+.schedule-score-separator {
+  color: var(--color-footer);
+}
+
+.schedule-time {
+  font-size: 15px;
+  color: var(--color-rank);
+}
+
+.schedule-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--color-footer);
+  font-size: 12px;
+}
+
+.schedule-meta a {
+  color: var(--color-tab-active);
+  text-decoration: none;
+}
+
+.schedule-status {
+  border-radius: 4px;
+  padding: 2px 6px;
+  background: var(--bg-tab-active);
+  color: var(--color-tab-active);
+  font-weight: 600;
+}
+
+.status-終了 {
+  background: #eef4ff;
+  color: #003087;
+}
+
+.status-中止 {
+  background: #fff5f5;
+  color: #c0392b;
+}
+
+[data-theme="dark"] .status-終了 {
+  background: #152240;
+  color: #6aa0e0;
+}
+
+[data-theme="dark"] .status-中止 {
+  background: #1e0e0e;
+  color: #e07070;
+}
+
+.schedule-comment {
+  margin-top: 8px;
+  color: var(--color-text);
+  font-size: 12px;
+}
+
 /* ─── Status / Error ───────────────────────────────────────── */
 .status-msg {
   text-align: center;

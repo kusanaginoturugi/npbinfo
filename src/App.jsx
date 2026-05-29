@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import Standings from './components/Standings';
 import PlayerStats from './components/PlayerStats';
+import Schedule from './components/Schedule';
 import './App.css';
 
 const TABS = [
   { key: 'standings', label: '順位表' },
   { key: 'players', label: '選手成績' },
+  { key: 'schedule', label: '試合日程' },
 ];
 
 function useTheme() {
@@ -90,6 +92,7 @@ export default function App() {
       <main className="app-main">
         {tab === 'standings' && <Standings />}
         {tab === 'players' && <PlayerStats />}
+        {tab === 'schedule' && <Schedule />}
       </main>
 
       <footer className="app-footer">

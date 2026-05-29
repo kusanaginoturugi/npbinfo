@@ -1,6 +1,7 @@
 // Cloudflare Worker エントリポイント
 // - /api/standings/:league    → npb-result APIプロキシ
 // - /api/stats/:type/:league  → npb.jp HTMLRewriter スクレイピング
+// - /api/schedule/:month      → npb.jp 試合日程スクレイピング
 // - その他                    → dist/ の静的アセットを返す
 
 // 年度取得用のヘルパー（リクエストのたびに計算する）
@@ -20,6 +21,10 @@ function getYear(url) {
   const parsed = year ? parseInt(year, 10) : current;
   // 解析に失敗した場合や範囲外の場合は current を返す
   return !isNaN(parsed) && available.includes(parsed) ? parsed : current;
+}
+
+function normalizeText(text) {
+  return text.replace(/&nbsp;/g, ' ').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 // ─── 順位表 ──────────────────────────────────────────────────
@@ -245,6 +250,118 @@ async function handleStats(type, league, request) {
   }
 }
 
+// ─── 試合日程・結果 ───────────────────────────────────────────
+function getGameStatus(game) {
+  if (game.comment.includes('中止')) return '中止';
+  if (game.homeScore !== null && game.awayScore !== null) return '終了';
+  return '試合前';
+}
+
+async function handleSchedule(monthParam) {
+  const match = monthParam?.match(/^(\d{4})-(\d{2})$/);
+  if (!match) {
+    return new Response('Not Found', { status: 404 });
+  }
+
+  const year = parseInt(match[1], 10);
+  const month = match[2];
+  if (!getAvailableYears().includes(year) || parseInt(month, 10) < 1 || parseInt(month, 10) > 12) {
+    return new Response('Not Found', { status: 404 });
+  }
+
+  const url = `https://npb.jp/games/${year}/schedule_${month}_detail.html`;
+
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept-Language': 'ja,en;q=0.9',
+      },
+    });
+    if (!res.ok) throw new Error(`npb.jp returned ${res.status} for URL: ${url}`);
+
+    const games = [];
+    let currentGame = null;
+    let currentField = null;
+
+    function appendText(chunk) {
+      if (!currentGame || !currentField) return;
+      currentGame[currentField] += chunk.text;
+    }
+
+    function enterTextField(field) {
+      return {
+        element(el) {
+          if (!currentGame) return;
+          currentField = field;
+          el.onEndTag(() => {
+            if (currentGame) currentGame[field] = normalizeText(currentGame[field]);
+            currentField = null;
+          });
+        },
+        text: appendText,
+      };
+    }
+
+    await new HTMLRewriter()
+      .on('tr', {
+        element(el) {
+          const id = el.getAttribute('id') ?? '';
+          const dateMatch = id.match(/^date(\d{2})(\d{2})$/);
+          if (!dateMatch) return;
+
+          currentGame = {
+            date: `${year}-${dateMatch[1]}-${dateMatch[2]}`,
+            homeTeam: '',
+            awayTeam: '',
+            homeScore: '',
+            awayScore: '',
+            stadium: '',
+            startTime: '',
+            comment: '',
+            scoreUrl: null,
+          };
+
+          el.onEndTag(() => {
+            if (!currentGame) return;
+            if (currentGame.homeTeam && currentGame.awayTeam) {
+              currentGame.homeScore = currentGame.homeScore === '' ? null : currentGame.homeScore;
+              currentGame.awayScore = currentGame.awayScore === '' ? null : currentGame.awayScore;
+              currentGame.status = getGameStatus(currentGame);
+              games.push(currentGame);
+            }
+            currentGame = null;
+          });
+        },
+      })
+      .on('a', {
+        element(el) {
+          if (!currentGame || currentGame.scoreUrl) return;
+          const href = el.getAttribute('href') ?? '';
+          if (href.startsWith('/scores/')) {
+            currentGame.scoreUrl = new URL(href, 'https://npb.jp').toString();
+          }
+        },
+      })
+      .on('div.team1', enterTextField('homeTeam'))
+      .on('div.team2', enterTextField('awayTeam'))
+      .on('div.score1', enterTextField('homeScore'))
+      .on('div.score2', enterTextField('awayScore'))
+      .on('div.place', enterTextField('stadium'))
+      .on('div.time', enterTextField('startTime'))
+      .on('div.comment', enterTextField('comment'))
+      .transform(res)
+      .text();
+
+    return Response.json({ year, month, games });
+  } catch (err) {
+    return Response.json(
+      { error: '試合日程の取得に失敗しました', detail: err.message },
+      { status: 502 }
+    );
+  }
+}
+
 // ─── ルーター ─────────────────────────────────────────────────
 export default {
   async fetch(request, env) {
@@ -259,6 +376,11 @@ export default {
     // /api/stats/:type/:league?year=YYYY
     if (segments[0] === 'api' && segments[1] === 'stats' && segments[2] && segments[3]) {
       return handleStats(segments[2], segments[3], request);
+    }
+
+    // /api/schedule/YYYY-MM
+    if (segments[0] === 'api' && segments[1] === 'schedule' && segments[2]) {
+      return handleSchedule(segments[2]);
     }
 
     // その他は dist/ の静的アセット（Workers Static Assets）
