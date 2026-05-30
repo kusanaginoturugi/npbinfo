@@ -2,6 +2,7 @@
 // - /api/standings/:league    → npb-result APIプロキシ
 // - /api/stats/:type/:league  → npb.jp HTMLRewriter スクレイピング
 // - /api/schedule/:month      → npb.jp 試合日程スクレイピング
+// - /api/weather              → Open-Meteo 天気予報プロキシ
 // - /og/standings/:league     → 順位表 OGP SVG
 // - その他                    → dist/ の静的アセットを返す
 
@@ -22,6 +23,17 @@ function getYear(url) {
   const parsed = year ? parseInt(year, 10) : current;
   // 解析に失敗した場合や範囲外の場合は current を返す
   return !isNaN(parsed) && available.includes(parsed) ? parsed : current;
+}
+
+function getTokyoDateValue(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 function normalizeText(text) {
@@ -69,6 +81,16 @@ function getScheduleTtl(year, month) {
 
   if (year === currentYear && month === currentMonth) return 300;
   return 86400;
+}
+
+function isValidDateValue(dateValue) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return false;
+
+  const [year, month, day] = dateValue.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day;
 }
 
 // ─── 順位表 ──────────────────────────────────────────────────
@@ -536,6 +558,75 @@ async function handleSchedule(monthParam, request, env) {
   }
 }
 
+// ─── 天気予報 ─────────────────────────────────────────────────
+function parseCoordinate(value, min, max) {
+  if (value === null || value.trim() === '') return null;
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) return null;
+  return parsed;
+}
+
+async function handleWeather(request, env) {
+  const url = new URL(request.url);
+  const lat = parseCoordinate(url.searchParams.get('lat'), -90, 90);
+  const lng = parseCoordinate(url.searchParams.get('lng'), -180, 180);
+  const date = url.searchParams.get('date') ?? '';
+
+  if (lat === null || lng === null || !isValidDateValue(date)) {
+    return Response.json(
+      { error: '不正なパラメータです', detail: 'lat/lng/date を確認してください' },
+      { status: 400 },
+    );
+  }
+
+  const latValue = String(lat);
+  const lngValue = String(lng);
+  const cacheKey = `weather:${latValue},${lngValue}:${date}`;
+  const cached = await getCachedJson(env, cacheKey, request);
+  if (cached) return Response.json(cached);
+
+  const isPast = date < getTokyoDateValue();
+  const endpoint = isPast
+    ? 'https://archive-api.open-meteo.com/v1/archive'
+    : 'https://api.open-meteo.com/v1/forecast';
+  const daily = isPast
+    ? 'weather_code,temperature_2m_max,temperature_2m_min'
+    : 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max';
+  const weatherUrl = new URL(endpoint);
+  weatherUrl.searchParams.set('latitude', latValue);
+  weatherUrl.searchParams.set('longitude', lngValue);
+  weatherUrl.searchParams.set('daily', daily);
+  weatherUrl.searchParams.set('timezone', 'Asia/Tokyo');
+  weatherUrl.searchParams.set('start_date', date);
+  weatherUrl.searchParams.set('end_date', date);
+
+  try {
+    const res = await fetch(weatherUrl.toString(), {
+      headers: { 'User-Agent': 'npbinfo-app/1.0' },
+    });
+    if (!res.ok) throw new Error(`open-meteo returned ${res.status}`);
+
+    const json = await res.json();
+    const dailyData = json.daily ?? {};
+    const data = {
+      date,
+      weatherCode: dailyData.weather_code?.[0] ?? null,
+      tempMax: dailyData.temperature_2m_max?.[0] ?? null,
+      tempMin: dailyData.temperature_2m_min?.[0] ?? null,
+      precipitationProb: dailyData.precipitation_probability_max?.[0] ?? null,
+    };
+
+    await putCachedJson(env, cacheKey, data, 1800, request);
+    return Response.json(data);
+  } catch (err) {
+    return Response.json(
+      { error: '天気予報の取得に失敗しました', detail: err.message },
+      { status: 502 },
+    );
+  }
+}
+
 // ─── ルーター ─────────────────────────────────────────────────
 export default {
   async fetch(request, env) {
@@ -555,6 +646,11 @@ export default {
     // /api/schedule/YYYY-MM
     if (segments[0] === 'api' && segments[1] === 'schedule' && segments[2]) {
       return handleSchedule(segments[2], request, env);
+    }
+
+    // /api/weather?lat=..&lng=..&date=YYYY-MM-DD
+    if (segments[0] === 'api' && segments[1] === 'weather') {
+      return handleWeather(request, env);
     }
 
     // /og/standings/:league

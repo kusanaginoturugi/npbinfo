@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiCache } from '../utils/apiCache';
 import { getContrastColor, getTeamInfo } from '../data/teams';
+import { STADIUMS } from '../data/stadiums';
+import { formatTemperature, getWeatherIcon } from '../utils/weatherIcon';
 
 const CURRENT_DATE = new Date();
 const CURRENT_MONTH = `${CURRENT_DATE.getFullYear()}-${String(CURRENT_DATE.getMonth() + 1).padStart(2, '0')}`;
@@ -33,6 +35,32 @@ function getScheduleTtl(monthValue) {
     return 5 * 60 * 1000;
   }
   return 24 * 60 * 60 * 1000;
+}
+
+function normalizeStadiumName(name) {
+  return String(name ?? '')
+    .replace(/\s+/g, '')
+    .replace(/・/g, '')
+    .toLowerCase();
+}
+
+function findStadiumByGameName(name) {
+  const normalized = normalizeStadiumName(name);
+  if (!normalized) return null;
+
+  return STADIUMS.find((stadium) => {
+    const names = [stadium.name, stadium.officialName].map(normalizeStadiumName);
+    return names.some(stadiumName => (
+      stadiumName === normalized
+        || stadiumName.includes(normalized)
+        || normalized.includes(stadiumName)
+    ));
+  }) ?? null;
+}
+
+function getWeatherCacheKey(stadium, date) {
+  if (!stadium || !date) return null;
+  return `${stadium.lat},${stadium.lng}:${date}`;
 }
 
 function TeamBadge({ name }) {
@@ -72,7 +100,25 @@ function ScoreBlock({ game }) {
   );
 }
 
-function ScheduleCard({ game }) {
+function ScheduleWeather({ weatherState }) {
+  if (!weatherState) return null;
+  if (weatherState.loading) {
+    return <span className="schedule-weather">天気...</span>;
+  }
+  if (!weatherState.data) return null;
+
+  const weather = getWeatherIcon(weatherState.data.weatherCode);
+  return (
+    <span className="schedule-weather" title={weather.label}>
+      <span aria-hidden="true">{weather.icon}</span>
+      <span>{formatTemperature(weatherState.data.tempMax)}</span>
+      <span>/</span>
+      <span>{formatTemperature(weatherState.data.tempMin)}</span>
+    </span>
+  );
+}
+
+function ScheduleCard({ game, weatherState }) {
   return (
     <article className="schedule-card">
       <div className="schedule-match">
@@ -92,6 +138,7 @@ function ScheduleCard({ game }) {
       <div className="schedule-meta">
         <span className={`schedule-status status-${game.status}`}>{game.status}</span>
         <span>{game.stadium || '-'}</span>
+        <ScheduleWeather weatherState={weatherState} />
         {game.scoreUrl && (
           <a href={game.scoreUrl} target="_blank" rel="noreferrer">
             NPB
@@ -111,6 +158,7 @@ export default function Schedule() {
   const [error, setError] = useState(null);
   const [errorDetail, setErrorDetail] = useState(null);
   const [lastUpdated, setLastUpdated] = useState({});
+  const [weatherCache, setWeatherCache] = useState({});
 
   const cacheKey = `schedule:${month}`;
   const schedule = cache[cacheKey];
@@ -163,7 +211,61 @@ export default function Schedule() {
     }
   }, [availableDates, month, selectedDate]);
 
-  const selectedGames = games.filter(game => game.date === selectedDate);
+  const selectedGames = useMemo(
+    () => games.filter(game => game.date === selectedDate),
+    [games, selectedDate],
+  );
+
+  const weatherTargets = useMemo(() => {
+    const targets = new Map();
+    selectedGames.forEach((game) => {
+      const stadium = findStadiumByGameName(game.stadium);
+      const key = getWeatherCacheKey(stadium, game.date);
+      if (!stadium || !key) return;
+      targets.set(key, { key, stadium, date: game.date });
+    });
+    return [...targets.values()];
+  }, [selectedGames]);
+
+  useEffect(() => {
+    if (!weatherTargets.length) return;
+
+    const missing = weatherTargets.filter(target => !weatherCache[target.key]);
+    if (!missing.length) return;
+
+    setWeatherCache(prev => {
+      const next = { ...prev };
+      missing.forEach((target) => {
+        next[target.key] = { loading: true };
+      });
+      return next;
+    });
+
+    let cancelled = false;
+    Promise.all(missing.map(target => (
+      fetch(`/api/weather?lat=${target.stadium.lat}&lng=${target.stadium.lng}&date=${target.date}`)
+        .then(r => r.json())
+        .then(json => ({
+          key: target.key,
+          data: json.error ? null : json,
+        }))
+        .catch(() => ({ key: target.key, data: null }))
+    )))
+      .then(results => {
+        if (cancelled) return;
+        setWeatherCache(prev => {
+          const next = { ...prev };
+          results.forEach((result) => {
+            next[result.key] = { loading: false, data: result.data };
+          });
+          return next;
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [weatherCache, weatherTargets]);
 
   const formatTimestamp = (ts) => {
     if (!ts) return '';
@@ -210,7 +312,11 @@ export default function Schedule() {
           {selectedGames.length > 0 ? (
             <div className="schedule-list">
               {selectedGames.map((game, index) => (
-                <ScheduleCard key={`${game.date}-${index}`} game={game} />
+                <ScheduleCard
+                  key={`${game.date}-${index}`}
+                  game={game}
+                  weatherState={weatherCache[getWeatherCacheKey(findStadiumByGameName(game.stadium), game.date)]}
+                />
               ))}
             </div>
           ) : (

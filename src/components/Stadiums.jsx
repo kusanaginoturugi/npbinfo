@@ -3,6 +3,25 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { getContrastColor, getTeamInfo } from '../data/teams';
 import { STADIUMS } from '../data/stadiums';
+import { formatPrecipitation, formatTemperature, getWeatherIcon } from '../utils/weatherIcon';
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+function formatDateValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatWeatherDate(dateValue) {
+  const date = new Date(`${dateValue}T00:00:00`);
+  return date.toLocaleDateString('ja-JP', {
+    month: 'numeric',
+    day: 'numeric',
+    weekday: 'short',
+  });
+}
 
 function fieldSizeLabel(stadium) {
   if (stadium.leftField === stadium.rightField) {
@@ -69,6 +88,73 @@ function DetailRow({ label, value }) {
   );
 }
 
+function WeatherBlock({ stadium }) {
+  const [weather, setWeather] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const today = new Date();
+    const dates = [
+      formatDateValue(today),
+      formatDateValue(new Date(today.getTime() + ONE_DAY_MS)),
+    ];
+    let cancelled = false;
+
+    setLoading(true);
+    setError(null);
+    Promise.all(dates.map(date => (
+      fetch(`/api/weather?lat=${stadium.lat}&lng=${stadium.lng}&date=${date}`)
+        .then(r => r.json())
+        .then(json => {
+          if (json.error) throw new Error(json.error);
+          return json;
+        })
+    )))
+      .then(data => {
+        if (!cancelled) setWeather(data);
+      })
+      .catch(e => {
+        if (!cancelled) setError(e.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [stadium]);
+
+  return (
+    <section className="weather-block" aria-label={`${stadium.name}の天気`}>
+      <h4>天気予報</h4>
+      {loading && <div className="weather-status">読み込み中...</div>}
+      {error && <div className="weather-status">取得できませんでした</div>}
+      {!loading && !error && (
+        <div className="weather-days">
+          {weather.map((day) => {
+            const weatherIcon = getWeatherIcon(day.weatherCode);
+            return (
+              <div key={day.date} className="weather-day">
+                <span className="weather-date">{formatWeatherDate(day.date)}</span>
+                <span className="weather-main">
+                  <span className="weather-icon" aria-hidden="true">{weatherIcon.icon}</span>
+                  <span>{weatherIcon.label}</span>
+                </span>
+                <span className="weather-temp">
+                  {formatTemperature(day.tempMax)} / {formatTemperature(day.tempMin)}
+                </span>
+                <span className="weather-rain">{formatPrecipitation(day.precipitationProb)}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function StadiumDetail({ stadium }) {
   const team = getTeamInfo(stadium.team);
 
@@ -94,6 +180,8 @@ function StadiumDetail({ stadium }) {
       <a className="stadium-link" href={stadium.url} target="_blank" rel="noreferrer">
         公式サイト
       </a>
+
+      <WeatherBlock stadium={stadium} />
     </section>
   );
 }
