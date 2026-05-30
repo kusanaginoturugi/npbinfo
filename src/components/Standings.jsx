@@ -118,12 +118,13 @@ export default function Standings() {
   const { isFavorite, toggleFavorite } = useFavorites();
 
   const cacheKey = `standings:${activeLeague}:${year}`;
+  const shouldUseLocalCache = activeLeague !== 'cp';
 
   useEffect(() => {
     if (data[cacheKey]) return;
 
     // 1. localStorage キャッシュをチェック
-    const cached = apiCache.get(cacheKey);
+    const cached = shouldUseLocalCache ? apiCache.get(cacheKey) : null;
     if (cached) {
       setData(prev => ({ ...prev, [cacheKey]: cached.data }));
       setLastUpdated(prev => ({ ...prev, [cacheKey]: cached.timestamp }));
@@ -133,18 +134,20 @@ export default function Standings() {
     // 2. なければ API を叩く
     setLoading(true);
     setError(null);
-    fetch(`/api/standings/${activeLeague}?year=${year}`)
+    const params = new URLSearchParams({ year: String(year) });
+    if (!shouldUseLocalCache) params.set('nocache', '1');
+    fetch(`/api/standings/${activeLeague}?${params.toString()}`)
       .then(r => r.json())
       .then(json => {
         if (json.error) throw new Error(json.error);
         const now = Date.now();
         setData(prev => ({ ...prev, [cacheKey]: json }));
         setLastUpdated(prev => ({ ...prev, [cacheKey]: now }));
-        apiCache.set(cacheKey, json, year);
+        if (shouldUseLocalCache) apiCache.set(cacheKey, json, year);
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [activeLeague, year, data, cacheKey]);
+  }, [activeLeague, year, data, cacheKey, shouldUseLocalCache]);
 
   const activeInfo = LEAGUES.find(l => l.key === activeLeague);
   const standingsRows = useMemo(() => {
