@@ -3,6 +3,7 @@
 // - /api/stats/:type/:league  → npb.jp HTMLRewriter スクレイピング
 // - /api/schedule/:month      → npb.jp 試合日程スクレイピング
 // - /api/weather              → Open-Meteo 天気予報プロキシ
+// - /api/headtohead/:league   → チーム間対戦成績スクレイピング
 // - /og/standings/:league     → 順位表 OGP SVG
 // - その他                    → dist/ の静的アセットを返す
 
@@ -120,6 +121,34 @@ const TEAM_COLORS = {
   'ロッテ': '#000000',
 };
 
+const TEAM_SHORT_NAMES = {
+  '神': '阪神',
+  'ヤ': 'ヤクルト',
+  '巨': '巨人',
+  'デ': 'DeNA',
+  '横浜DeNA': 'DeNA',
+  '広': '広島',
+  '中': '中日',
+  '西': '西武',
+  'オ': 'オリックス',
+  'ソ': 'ソフトバンク',
+  '日': '日本ハム',
+  'ロ': 'ロッテ',
+  '楽': '楽天',
+  '阪神タイガース': '阪神',
+  '東京ヤクルトスワローズ': 'ヤクルト',
+  '読売ジャイアンツ': '巨人',
+  '横浜DeNAベイスターズ': 'DeNA',
+  '広島東洋カープ': '広島',
+  '中日ドラゴンズ': '中日',
+  '埼玉西武ライオンズ': '西武',
+  'オリックス・バファローズ': 'オリックス',
+  '福岡ソフトバンクホークス': 'ソフトバンク',
+  '北海道日本ハムファイターズ': '日本ハム',
+  '千葉ロッテマリーンズ': 'ロッテ',
+  '東北楽天ゴールデンイーグルス': '楽天',
+};
+
 const STANDINGS_FIELDS = {
   0: 'name', 1: 'playGameCount', 2: 'win', 3: 'lose',
   4: 'draw', 5: 'pct', 6: 'gamesBehind',
@@ -227,6 +256,150 @@ async function handleStandings(league, request, env) {
     return Response.json(
       { error: '順位表の取得に失敗しました', detail: err.message },
       { status: 502 }
+    );
+  }
+}
+
+// ─── チーム間対戦成績 ─────────────────────────────────────────
+function normalizeTeamShortName(value) {
+  const normalized = normalizeText(value);
+  return TEAM_SHORT_NAMES[normalized] ?? normalized;
+}
+
+function normalizeHeadtoHeadValue(value) {
+  const normalized = normalizeText(value);
+  if (!normalized || normalized === '***' || normalized === '--') return null;
+  return normalized;
+}
+
+function parseOpponentHeader(value) {
+  const normalized = normalizeText(value);
+  const match = normalized.match(/^対(.+)$/);
+  if (!match) return null;
+  return TEAM_SHORT_NAMES[match[1]] ?? match[1];
+}
+
+async function handleHeadToHead(league, request, env) {
+  if (!['cl', 'pl'].includes(league)) {
+    return new Response('Not Found', { status: 404 });
+  }
+
+  const year = getYear(request.url);
+  const cacheKey = `headtohead:${league}:${year}`;
+  const cached = await getCachedJson(env, cacheKey, request);
+  if (cached) return Response.json(cached);
+
+  const leagueCode = league === 'cl' ? 'c' : 'p';
+  const url = `https://npb.jp/bis/${year}/stats/std_${leagueCode}.html`;
+
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept-Language': 'ja,en;q=0.9',
+      },
+    });
+    if (!res.ok) throw new Error(`npb.jp returned ${res.status} for URL: ${url}`);
+
+    const teams = [];
+    let tableIndex = -1;
+    let inTable = false;
+    let rowIndex = 0;
+    let headers = [];
+    let cells = [];
+    let cellText = '';
+    let currentCellTag = null;
+
+    function pushCell() {
+      const text = normalizeText(cellText);
+      if (currentCellTag === 'th') headers.push(text);
+      if (currentCellTag === 'td') cells.push(text);
+      cellText = '';
+      currentCellTag = null;
+    }
+
+    await new HTMLRewriter()
+      .on('table', {
+        element(el) {
+          const className = el.getAttribute('class') ?? '';
+          if (!className.includes('tablefix2')) return;
+          tableIndex++;
+          if (tableIndex > 1) return;
+
+          inTable = true;
+          rowIndex = 0;
+          headers = [];
+          el.onEndTag(() => {
+            inTable = false;
+          });
+        },
+      })
+      .on('tr', {
+        element(el) {
+          if (!inTable || tableIndex > 1) return;
+          cells = [];
+          el.onEndTag(() => {
+            if (!inTable || tableIndex > 1) return;
+            if (rowIndex > 0 && cells[0]) {
+              const teamName = normalizeTeamShortName(cells[0]);
+              const team = teams.find(item => item.name === teamName) ?? {
+                name: teamName,
+                vs: {},
+                interleague: {},
+              };
+              if (!teams.includes(team)) teams.push(team);
+
+              headers.forEach((header, index) => {
+                const opponent = parseOpponentHeader(header);
+                if (!opponent) return;
+
+                const value = normalizeHeadtoHeadValue(cells[index]);
+                if (!value) return;
+                if (tableIndex === 0) {
+                  team.vs[opponent] = value;
+                } else {
+                  team.interleague[opponent] = value;
+                }
+              });
+            }
+            rowIndex++;
+          });
+        },
+      })
+      .on('th', {
+        element(el) {
+          if (!inTable || tableIndex > 1) return;
+          currentCellTag = 'th';
+          cellText = '';
+          el.onEndTag(pushCell);
+        },
+        text(chunk) {
+          if (!inTable || currentCellTag !== 'th') return;
+          cellText += chunk.text;
+        },
+      })
+      .on('td', {
+        element(el) {
+          if (!inTable || tableIndex > 1) return;
+          currentCellTag = 'td';
+          cellText = '';
+          el.onEndTag(pushCell);
+        },
+        text(chunk) {
+          if (!inTable || currentCellTag !== 'td') return;
+          cellText += chunk.text;
+        },
+      })
+      .transform(res)
+      .text();
+
+    const data = { league, year, teams };
+    await putCachedJson(env, cacheKey, data, 1800, request);
+    return Response.json(data);
+  } catch (err) {
+    return Response.json(
+      { error: '対戦成績の取得に失敗しました', detail: err.message },
+      { status: 502 },
     );
   }
 }
@@ -627,15 +800,124 @@ async function handleWeather(request, env) {
   }
 }
 
+// ─── 直近5試合の勝敗 ─────────────────────────────────────────
+async function handleRecent(league, request, env) {
+  if (!['cl', 'pl'].includes(league)) {
+    return new Response('Not Found', { status: 404 });
+  }
+
+  const year = getYear(request.url);
+  const cacheKey = `recent:${league}:${year}`;
+  const cached = await getCachedJson(env, cacheKey, request);
+  if (cached) return Response.json(cached);
+
+  const currentYear = getCurrentYear();
+  let endMonth;
+  if (year < currentYear) {
+    endMonth = 12; // 過去年は12月まで取得
+  } else {
+    // 現在年は現在の月まで取得
+    const tokyoDate = getTokyoDateValue();
+    endMonth = parseInt(tokyoDate.split('-')[1], 10);
+  }
+
+  const clTeams = ['阪神', 'DeNA', '巨人', '広島', '中日', 'ヤクルト'];
+  const plTeams = ['オリックス', 'ロッテ', 'ソフトバンク', '楽天', '西武', '日本ハム'];
+  const targetTeams = league === 'cl' ? clTeams : plTeams;
+
+  // 3月からendMonthまで schedule を順次取得
+  const allGames = [];
+  for (let m = 3; m <= endMonth; m++) {
+    const monthStr = String(m).padStart(2, '0');
+    const monthParam = `${year}-${monthStr}`;
+    try {
+      const res = await handleSchedule(monthParam, request, env);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.games) {
+          allGames.push(...data.games);
+        }
+      }
+    } catch (err) {
+      console.error(`Failed to fetch schedule for ${monthParam}: ${err.message}`);
+    }
+  }
+
+  // 終了試合をチームごとに集約
+  const teamsRecent = {};
+  for (const team of targetTeams) {
+    teamsRecent[team] = [];
+  }
+
+  // 日付順にソート
+  allGames.sort((a, b) => a.date.localeCompare(b.date));
+
+  for (const game of allGames) {
+    if (game.status !== '終了') continue;
+
+    const home = normalizeTeamShortName(game.homeTeam);
+    const away = normalizeTeamShortName(game.awayTeam);
+    const homeScore = parseInt(game.homeScore, 10);
+    const awayScore = parseInt(game.awayScore, 10);
+
+    if (isNaN(homeScore) || isNaN(awayScore)) continue;
+
+    if (teamsRecent[home] !== undefined) {
+      let won = null;
+      if (homeScore > awayScore) won = true;
+      else if (homeScore < awayScore) won = false;
+
+      teamsRecent[home].push({
+        date: game.date,
+        vsTeam: away,
+        won
+      });
+    }
+
+    if (teamsRecent[away] !== undefined) {
+      let won = null;
+      if (awayScore > homeScore) won = true;
+      else if (awayScore < homeScore) won = false;
+
+      teamsRecent[away].push({
+        date: game.date,
+        vsTeam: home,
+        won
+      });
+    }
+  }
+
+  // 各チームの最後の5試合を「新しい順（逆順）」で抽出
+  const resultTeams = {};
+  for (const team of targetTeams) {
+    const games = teamsRecent[team];
+    resultTeams[team] = games.slice(-5).reverse();
+  }
+
+  const resultData = { league, year, teams: resultTeams };
+  await putCachedJson(env, cacheKey, resultData, 600, request);
+  return Response.json(resultData);
+}
+
 // ─── ルーター ─────────────────────────────────────────────────
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const segments = url.pathname.split('/').filter(Boolean);
 
+    // /api/recent/:league?year=YYYY
+    if (segments[0] === 'api' && segments[1] === 'recent' && segments[2]) {
+      return handleRecent(segments[2], request, env);
+    }
+
     // /api/standings/:league?year=YYYY
     if (segments[0] === 'api' && segments[1] === 'standings' && segments[2]) {
       return handleStandings(segments[2], request, env);
+    }
+
+    // /api/headtohead/:league?year=YYYY
+    if (segments[0] === 'api' && segments[1] === 'headtohead' && segments[2]) {
+      return handleHeadToHead(segments[2], request, env);
     }
 
     // /api/stats/:type/:league?year=YYYY

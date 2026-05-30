@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiCache } from '../utils/apiCache';
-import { getContrastColor, getTeamInfo } from '../data/teams';
+import { getContrastColor, getTeamInfo, getTeamLeague, normalizeTeamName } from '../data/teams';
 import { STADIUMS } from '../data/stadiums';
 import { formatTemperature, getWeatherIcon } from '../utils/weatherIcon';
 
@@ -63,6 +63,65 @@ function getWeatherCacheKey(stadium, date) {
   return `${stadium.lat},${stadium.lng}:${date}`;
 }
 
+function normalizeHeadToHeadTeamName(name) {
+  const normalized = normalizeTeamName(name);
+  return normalized === '横浜DeNA' ? 'DeNA' : normalized;
+}
+
+function getHeadToHeadRecord(game, headToHeadCache, year) {
+  const homeTeam = normalizeHeadToHeadTeamName(game.homeTeam);
+  const awayTeam = normalizeHeadToHeadTeamName(game.awayTeam);
+  const homeLeague = getTeamLeague(homeTeam);
+  const awayLeague = getTeamLeague(awayTeam);
+  if (!homeTeam || !awayTeam || !homeLeague || !awayLeague) return null;
+
+  const cacheKey = `headtohead:${homeLeague}:${year}`;
+  const data = headToHeadCache[cacheKey];
+  const team = data?.teams?.find(item => item.name === homeTeam);
+  const record = homeLeague === awayLeague
+    ? team?.vs?.[awayTeam]
+    : team?.interleague?.[awayTeam];
+
+  if (!record || record === '--' || record === '***') return null;
+  return record;
+}
+
+function getRecentGames(teamName, recentCache, year) {
+  const normalized = normalizeHeadToHeadTeamName(teamName);
+  const league = getTeamLeague(normalized);
+  if (!normalized || !league) return null;
+
+  const cacheKey = `recent:${league}:${year}`;
+  const data = recentCache[cacheKey];
+  return data?.teams?.[normalized] ?? null;
+}
+
+function RecentBadges({ games }) {
+  if (!games || games.length === 0) return null;
+
+  return (
+    <div className="schedule-recent-badges">
+      {games.map((g, idx) => {
+        let symbol = '△';
+        let className = 'draw';
+        if (g.won === true) {
+          symbol = '◯';
+          className = 'win';
+        } else if (g.won === false) {
+          symbol = '●';
+          className = 'lose';
+        }
+        const title = `${g.date} vs${g.vsTeam} (${g.won === true ? '勝' : g.won === false ? '敗' : '分'})`;
+        return (
+          <span key={idx} className={`recent-badge ${className}`} title={title}>
+            {symbol}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 function TeamBadge({ name }) {
   const info = getTeamInfo(name);
   const bg = info?.colors?.[0] ?? '#555';
@@ -118,26 +177,38 @@ function ScheduleWeather({ weatherState }) {
   );
 }
 
-function ScheduleCard({ game, weatherState }) {
+function HeadToHeadBadge({ record }) {
+  if (!record) return null;
+  return <span className="schedule-headtohead">今季 {record}</span>;
+}
+
+function ScheduleCard({ game, weatherState, headToHeadRecord, homeRecent, awayRecent }) {
   return (
     <article className="schedule-card">
       <div className="schedule-match">
         <div className="schedule-team">
           <TeamBadge name={game.homeTeam} />
-          <TeamName name={game.homeTeam} />
+          <div className="schedule-team-info">
+            <TeamName name={game.homeTeam} />
+            <RecentBadges games={homeRecent} />
+          </div>
         </div>
 
         <ScoreBlock game={game} />
 
         <div className="schedule-team schedule-team-away">
+          <div className="schedule-team-info schedule-team-info-away">
+            <TeamName name={game.awayTeam} />
+            <RecentBadges games={awayRecent} />
+          </div>
           <TeamBadge name={game.awayTeam} />
-          <TeamName name={game.awayTeam} />
         </div>
       </div>
 
       <div className="schedule-meta">
         <span className={`schedule-status status-${game.status}`}>{game.status}</span>
         <span>{game.stadium || '-'}</span>
+        <HeadToHeadBadge record={headToHeadRecord} />
         <ScheduleWeather weatherState={weatherState} />
         {game.scoreUrl && (
           <a href={game.scoreUrl} target="_blank" rel="noreferrer">
@@ -159,6 +230,8 @@ export default function Schedule() {
   const [errorDetail, setErrorDetail] = useState(null);
   const [lastUpdated, setLastUpdated] = useState({});
   const [weatherCache, setWeatherCache] = useState({});
+  const [headToHeadCache, setHeadToHeadCache] = useState({});
+  const [recentCache, setRecentCache] = useState({});
 
   const cacheKey = `schedule:${month}`;
   const schedule = cache[cacheKey];
@@ -226,6 +299,80 @@ export default function Schedule() {
     });
     return [...targets.values()];
   }, [selectedGames]);
+
+  const headToHeadLeagues = useMemo(() => {
+    return [...new Set(games.flatMap((game) => (
+      [getTeamLeague(game.homeTeam), getTeamLeague(game.awayTeam)].filter(Boolean)
+    )))].sort();
+  }, [games]);
+
+  useEffect(() => {
+    if (!headToHeadLeagues.length) return;
+
+    const year = Number(month.slice(0, 4));
+    const missing = headToHeadLeagues.filter((league) => {
+      const key = `headtohead:${league}:${year}`;
+      return !headToHeadCache[key];
+    });
+    if (!missing.length) return;
+
+    let cancelled = false;
+    Promise.all(missing.map(league => (
+      fetch(`/api/headtohead/${league}?year=${year}`)
+        .then(r => r.json())
+        .then(json => ({ league, json }))
+        .catch(() => ({ league, json: null }))
+    )))
+      .then(results => {
+        if (cancelled) return;
+        setHeadToHeadCache(prev => {
+          const next = { ...prev };
+          results.forEach(({ league, json }) => {
+            if (!json || json.error) return;
+            next[`headtohead:${league}:${year}`] = json;
+          });
+          return next;
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [headToHeadCache, headToHeadLeagues, month]);
+
+  useEffect(() => {
+    if (!headToHeadLeagues.length) return;
+
+    const year = Number(month.slice(0, 4));
+    const missing = headToHeadLeagues.filter((league) => {
+      const key = `recent:${league}:${year}`;
+      return !recentCache[key];
+    });
+    if (!missing.length) return;
+
+    let cancelled = false;
+    Promise.all(missing.map(league => (
+      fetch(`/api/recent/${league}?year=${year}`)
+        .then(r => r.json())
+        .then(json => ({ league, json }))
+        .catch(() => ({ league, json: null }))
+    )))
+      .then(results => {
+        if (cancelled) return;
+        setRecentCache(prev => {
+          const next = { ...prev };
+          results.forEach(({ league, json }) => {
+            if (!json || json.error) return;
+            next[`recent:${league}:${year}`] = json;
+          });
+          return next;
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [recentCache, headToHeadLeagues, month]);
 
   useEffect(() => {
     if (!weatherTargets.length) return;
@@ -316,6 +463,9 @@ export default function Schedule() {
                   key={`${game.date}-${index}`}
                   game={game}
                   weatherState={weatherCache[getWeatherCacheKey(findStadiumByGameName(game.stadium), game.date)]}
+                  headToHeadRecord={getHeadToHeadRecord(game, headToHeadCache, Number(month.slice(0, 4)))}
+                  homeRecent={getRecentGames(game.homeTeam, recentCache, Number(month.slice(0, 4)))}
+                  awayRecent={getRecentGames(game.awayTeam, recentCache, Number(month.slice(0, 4)))}
                 />
               ))}
             </div>
