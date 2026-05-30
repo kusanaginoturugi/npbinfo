@@ -280,13 +280,11 @@ async function handleStandings(league, request, env) {
     if (!stdRes.ok) throw new Error(`npb.jp (std) returned ${stdRes.status}`);
 
     const isLegacy = year <= 2024;
-    const battingClass = isLegacy ? 'ststats' : 'tablefix2';
-    const pitchingClass = isLegacy ? 'ststats' : 'tablefix2';
 
     // 打撃・投手成績を並列でパース
     const [battingStats, pitchingStats] = await Promise.all([
-      parseExtraStats(tmbRes, battingClass, 0, { 1: 'avg', 9: 'hr', 12: 'sb' }),
-      parseExtraStats(tmpRes, pitchingClass, 0, { 1: 'era' }),
+      parseExtraStats(tmbRes, 'tablefix2', 0, { 1: 'avg', 9: 'hr', 12: 'sb' }, isLegacy),
+      parseExtraStats(tmpRes, 'tablefix2', 0, { 1: 'era' }, isLegacy),
     ]);
 
     const teams = [];
@@ -310,30 +308,66 @@ function normalizeTeamShortName(value) {
   return TEAM_SHORT_NAMES[normalized] ?? normalized;
 }
 
-async function parseExtraStats(res, tableClass, teamNameIdx, fieldMappings) {
+async function parseExtraStats(res, tableClass, teamNameIdx, fieldMappings, isLegacy = false) {
   if (!res.ok) return {};
   const stats = {};
   let inTable = false;
+  let tableDepth = 0;
+  let targetTableDepth = -1;
+  let tableResolved = false;
   let rowIndex = 0;
   let cells = [];
   let cellText = '';
 
-  await new HTMLRewriter()
+  const rewriter = new HTMLRewriter();
+
+  if (isLegacy) {
+    rewriter.on('tr.ststats', {
+      element(el) {
+        cells = [];
+        el.onEndTag(() => {
+          if (cells.length > teamNameIdx) {
+            const teamName = normalizeTeamShortName(cells[teamNameIdx]);
+            const s = {};
+            for (const [idx, field] of Object.entries(fieldMappings)) {
+              s[field] = cells[idx] ?? '-';
+            }
+            stats[teamName] = s;
+          }
+        });
+      },
+    });
+  }
+
+  rewriter
     .on('table', {
       element(el) {
+        if (isLegacy) return;
+        tableDepth++;
+        if (tableResolved) return;
         const className = el.getAttribute('class') ?? '';
-        if (className.includes(tableClass)) {
+        if (targetTableDepth === -1 && (className.includes(tableClass) || className.includes('NpbSt'))) {
           inTable = true;
+          targetTableDepth = tableDepth;
           rowIndex = 0;
+          el.onEndTag(() => {
+            inTable = false;
+            tableResolved = true;
+            targetTableDepth = -1;
+          });
         }
+        el.onEndTag(() => {
+          tableDepth--;
+        });
       },
     })
     .on('tr', {
       element(el) {
-        if (!inTable) return;
+        if (isLegacy) return;
+        if (!inTable || tableDepth !== targetTableDepth) return;
         cells = [];
         el.onEndTag(() => {
-          if (!inTable) return;
+          if (!inTable || tableDepth !== targetTableDepth) return;
           if (rowIndex > 0 && cells.length > teamNameIdx) {
             const teamName = normalizeTeamShortName(cells[teamNameIdx]);
             const s = {};
@@ -348,15 +382,26 @@ async function parseExtraStats(res, tableClass, teamNameIdx, fieldMappings) {
     })
     .on('td', {
       element(el) {
-        if (!inTable) return;
+        if (isLegacy) {
+          cellText = '';
+          el.onEndTag(() => {
+            cells.push(cellText.trim());
+          });
+          return;
+        }
+        if (!inTable || tableDepth !== targetTableDepth) return;
         cellText = '';
         el.onEndTag(() => {
-          if (!inTable) return;
+          if (!inTable || tableDepth !== targetTableDepth) return;
           cells.push(cellText.trim());
         });
       },
       text(chunk) {
-        if (!inTable) return;
+        if (isLegacy) {
+          cellText += chunk.text;
+          return;
+        }
+        if (!inTable || tableDepth < targetTableDepth) return;
         cellText += chunk.text;
       },
     })
