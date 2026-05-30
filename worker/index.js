@@ -2,6 +2,7 @@
 // - /api/standings/:league    → npb-result APIプロキシ
 // - /api/stats/:type/:league  → npb.jp HTMLRewriter スクレイピング
 // - /api/schedule/:month      → npb.jp 試合日程スクレイピング
+// - /og/standings/:league     → 順位表 OGP SVG
 // - その他                    → dist/ の静的アセットを返す
 
 // 年度取得用のヘルパー（リクエストのたびに計算する）
@@ -25,6 +26,15 @@ function getYear(url) {
 
 function normalizeText(text) {
   return text.replace(/&nbsp;/g, ' ').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function escapeXml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
 }
 
 function skipCache(request) {
@@ -63,6 +73,30 @@ function getScheduleTtl(year, month) {
 
 // ─── 順位表 ──────────────────────────────────────────────────
 const VALID_LEAGUES = new Set(['cl', 'pl', 'cp', 'op']);
+
+const LEAGUE_LABELS = {
+  cl: 'セ・リーグ',
+  pl: 'パ・リーグ',
+  cp: '交流戦',
+  op: 'オープン戦',
+};
+
+const TEAM_COLORS = {
+  '阪神': '#FFE600',
+  '横浜DeNA': '#003F8E',
+  'DeNA': '#003F8E',
+  '読売': '#F49C00',
+  '巨人': '#F49C00',
+  '広島': '#CC0000',
+  '中日': '#0035AD',
+  'ヤクルト': '#001943',
+  'ソフトバンク': '#F3C945',
+  '日本ハム': '#005496',
+  'オリックス': '#000019',
+  '楽天': '#870011',
+  '西武': '#1F2D53',
+  'ロッテ': '#000000',
+};
 
 const STANDINGS_FIELDS = {
   0: 'name', 1: 'playGameCount', 2: 'win', 3: 'lose',
@@ -172,6 +206,89 @@ async function handleStandings(league, request, env) {
       { error: '順位表の取得に失敗しました', detail: err.message },
       { status: 502 }
     );
+  }
+}
+
+// ─── OGP SVG ────────────────────────────────────────────────
+function getTeamColor(teamName) {
+  const normalizedTeamName = String(teamName ?? '');
+  return Object.entries(TEAM_COLORS).find(([name]) => normalizedTeamName.includes(name))?.[1] ?? '#334155';
+}
+
+function renderStandingsSvg(data, league) {
+  const label = LEAGUE_LABELS[league] ?? league;
+  const teams = (data.teams ?? []).slice(0, 12);
+  const year = data.year ?? getCurrentYear();
+  const compact = teams.length > 6;
+  const startY = compact ? 164 : 178;
+  const rowStep = compact ? 34 : 58;
+  const rowHeight = compact ? 28 : 46;
+  const rankFontSize = compact ? 18 : 24;
+  const teamFontSize = compact ? 19 : 26;
+  const statFontSize = compact ? 18 : 22;
+  const circleRadius = compact ? 10 : 14;
+  const rows = teams.length === 0 ? `
+      <text x="600" y="340" font-size="32" font-weight="700" text-anchor="middle" fill="#64748b">順位データがありません</text>` : teams.map((team, index) => {
+    const y = startY + index * rowStep;
+    const color = getTeamColor(team.name);
+    return `
+      <g>
+        <rect x="86" y="${y - 24}" width="1028" height="${rowHeight}" rx="10" fill="#ffffff" opacity="${index % 2 === 0 ? '0.98' : '0.9'}"/>
+        <circle cx="118" cy="${y - 10}" r="${circleRadius}" fill="${color}"/>
+        <text x="150" y="${y - 3}" font-size="${rankFontSize}" font-weight="700" fill="#0f172a">${escapeXml(team.rank)}</text>
+        <text x="214" y="${y - 3}" font-size="${teamFontSize}" font-weight="700" fill="#0f172a">${escapeXml(team.name)}</text>
+        <text x="760" y="${y - 3}" font-size="${statFontSize}" fill="#334155">勝 ${escapeXml(team.win)}</text>
+        <text x="870" y="${y - 3}" font-size="${statFontSize}" fill="#334155">敗 ${escapeXml(team.lose)}</text>
+        <text x="980" y="${y - 3}" font-size="${statFontSize}" fill="#334155">差 ${escapeXml(team.gamesBehind)}</text>
+      </g>`;
+  }).join('');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="${escapeXml(label)}順位表">
+  <rect width="1200" height="630" fill="#f4f6f9"/>
+  <rect x="0" y="0" width="1200" height="120" fill="#0a1628"/>
+  <rect x="0" y="120" width="1200" height="510" fill="#e8eef8"/>
+  <text x="86" y="74" font-size="42" font-weight="800" fill="#ffffff">${escapeXml(label)} 順位表</text>
+  <text x="1008" y="74" font-size="26" font-weight="700" text-anchor="end" fill="#c7d2fe">${escapeXml(year)}年</text>
+  <text x="86" y="142" font-size="18" font-weight="700" fill="#475569">順位</text>
+  <text x="214" y="142" font-size="18" font-weight="700" fill="#475569">チーム名</text>
+  <text x="760" y="142" font-size="18" font-weight="700" fill="#475569">勝</text>
+  <text x="870" y="142" font-size="18" font-weight="700" fill="#475569">敗</text>
+  <text x="980" y="142" font-size="18" font-weight="700" fill="#475569">差</text>
+  ${rows}
+  <text x="86" y="584" font-size="24" font-weight="800" fill="#e8392a">NPB</text>
+  <text x="150" y="584" font-size="20" fill="#334155">npbinfo.kusanaginoturugi.workers.dev</text>
+</svg>`;
+}
+
+function renderErrorSvg(message) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="データ取得エラー">
+  <rect width="1200" height="630" fill="#b91c1c"/>
+  <text x="600" y="288" font-size="54" font-weight="800" text-anchor="middle" fill="#ffffff">データ取得エラー</text>
+  <text x="600" y="342" font-size="24" text-anchor="middle" fill="#fee2e2">${escapeXml(message)}</text>
+  <text x="600" y="420" font-size="22" text-anchor="middle" fill="#ffffff">npbinfo.kusanaginoturugi.workers.dev</text>
+</svg>`;
+}
+
+async function handleStandingsOg(league, request, env) {
+  if (!VALID_LEAGUES.has(league)) {
+    return new Response('Not Found', { status: 404 });
+  }
+
+  const headers = {
+    'Content-Type': 'image/svg+xml; charset=utf-8',
+    'Cache-Control': 'public, max-age=300',
+  };
+
+  try {
+    const res = await handleStandings(league, request, env);
+    if (!res.ok) throw new Error(`standings ${res.status}`);
+
+    const data = await res.json();
+    return new Response(renderStandingsSvg(data, league), { headers });
+  } catch (err) {
+    return new Response(renderErrorSvg(err.message), { headers });
   }
 }
 
@@ -434,6 +551,11 @@ export default {
     // /api/schedule/YYYY-MM
     if (segments[0] === 'api' && segments[1] === 'schedule' && segments[2]) {
       return handleSchedule(segments[2], request, env);
+    }
+
+    // /og/standings/:league
+    if (segments[0] === 'og' && segments[1] === 'standings' && segments[2]) {
+      return handleStandingsOg(segments[2], request, env);
     }
 
     // その他は dist/ の静的アセット（Workers Static Assets）
