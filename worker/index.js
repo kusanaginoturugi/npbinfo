@@ -158,6 +158,85 @@ const STANDINGS_FIELDS = {
   4: 'draw', 5: 'pct', 6: 'gamesBehind',
 };
 
+function buildStandingsRewriter(teams, battingStats, pitchingStats) {
+  let inTable = false;
+  let tableDepth = 0;
+  let targetTableDepth = -1;
+  let rowIndex = 0;
+  let cells = [];
+  let cellText = '';
+
+  return new HTMLRewriter()
+    .on('table', {
+      element(el) {
+        tableDepth++;
+        if (targetTableDepth === -1) {
+          const className = el.getAttribute('class') ?? '';
+          if (className.includes('tablefix2') || className.includes('stdtblSubmain')) {
+            inTable = true;
+            targetTableDepth = tableDepth;
+            rowIndex = 0;
+          }
+        }
+        el.onEndTag(() => {
+          if (tableDepth === targetTableDepth) {
+            inTable = false;
+            targetTableDepth = -1;
+          }
+          tableDepth--;
+        });
+      },
+    })
+    .on('tr', {
+      element(el) {
+        if (!inTable || tableDepth !== targetTableDepth) return;
+        cells = [];
+        el.onEndTag(() => {
+          if (!inTable || tableDepth !== targetTableDepth) return;
+          // チーム名（インデックス0）があることを確認
+          if (cells.length >= 2 && cells[0] && !cells[0].includes('チーム') && !cells[0].includes('リーグ')) {
+            const team = {};
+            for (const [idx, field] of Object.entries(STANDINGS_FIELDS)) {
+              team[field] = cells[idx] ?? '-';
+            }
+            team.rank = teams.length + 1;
+
+            // 追加成績をマージ
+            const normalizedName = normalizeTeamShortName(team.name);
+            const bStats = battingStats[normalizedName] || {};
+            const pStats = pitchingStats[normalizedName] || {};
+            team.avg = bStats.avg || '-';
+            team.hr = bStats.hr || '-';
+            team.sb = bStats.sb || '-';
+            team.era = pStats.era || '-';
+
+            // 重複チェック（交流戦テーブルなどが続く場合があるため）
+            if (!teams.some(t => t.name === team.name)) {
+              teams.push(team);
+            }
+          }
+          rowIndex++;
+        });
+      },
+    })
+    .on('td', {
+      element(el) {
+        if (!inTable || tableDepth !== targetTableDepth) return;
+        cellText = '';
+        el.onEndTag(() => {
+          if (!inTable || tableDepth !== targetTableDepth) return;
+          cells.push(cellText.replace(/\s+/g, ' ').trim());
+        });
+      },
+    })
+    .on('*', {
+      text(chunk) {
+        if (!inTable || tableDepth < targetTableDepth) return;
+        cellText += chunk.text;
+      },
+    });
+}
+
 async function handleStandings(league, request, env) {
   if (!VALID_LEAGUES.has(league)) {
     return new Response('Not Found', { status: 404 });
@@ -200,78 +279,18 @@ async function handleStandings(league, request, env) {
 
     if (!stdRes.ok) throw new Error(`npb.jp (std) returned ${stdRes.status}`);
 
+    const isLegacy = year <= 2024;
+    const battingClass = isLegacy ? 'ststats' : 'tablefix2';
+    const pitchingClass = isLegacy ? 'ststats' : 'tablefix2';
+
     // 打撃・投手成績を並列でパース
     const [battingStats, pitchingStats] = await Promise.all([
-      parseExtraStats(tmbRes, 'tablefix2', 0, { 1: 'avg', 9: 'hr', 12: 'sb' }),
-      parseExtraStats(tmpRes, 'tablefix2', 0, { 1: 'era' }),
+      parseExtraStats(tmbRes, battingClass, 0, { 1: 'avg', 9: 'hr', 12: 'sb' }),
+      parseExtraStats(tmpRes, pitchingClass, 0, { 1: 'era' }),
     ]);
 
     const teams = [];
-    let inTable = false;
-    let firstStandingsTableDone = false;
-    let rowIndex = 0;
-    let cells = [];
-    let cellText = '';
-
-    await new HTMLRewriter()
-      .on('table', {
-        element(el) {
-          if (firstStandingsTableDone) return;
-          const className = el.getAttribute('class') ?? '';
-          if (!className.includes('tablefix2')) return;
-          inTable = true;
-          rowIndex = 0;
-          el.onEndTag(() => {
-            inTable = false;
-            firstStandingsTableDone = true;
-          });
-        },
-      })
-      .on('tr', {
-        element(el) {
-          if (!inTable) return;
-          cells = [];
-          el.onEndTag(() => {
-            if (!inTable) return;
-            // ヘッダー行をスキップ。チーム名（インデックス0）があることを確認
-            if (rowIndex > 0 && cells.length >= 7 && cells[0] && !cells[0].includes('リーグ')) {
-              const team = {};
-              for (const [idx, field] of Object.entries(STANDINGS_FIELDS)) {
-                team[field] = cells[idx] ?? '-';
-              }
-              team.rank = rowIndex;
-
-              // 追加成績をマージ
-              const normalizedName = normalizeTeamShortName(team.name);
-              const bStats = battingStats[normalizedName] || {};
-              const pStats = pitchingStats[normalizedName] || {};
-              team.avg = bStats.avg || '-';
-              team.hr = bStats.hr || '-';
-              team.sb = bStats.sb || '-';
-              team.era = pStats.era || '-';
-
-              teams.push(team);
-            }
-            rowIndex++;
-          });
-        },
-      })
-      .on('td', {
-        element(el) {
-          if (!inTable) return;
-          cellText = '';
-          el.onEndTag(() => {
-            if (!inTable) return;
-            cells.push(cellText.trim());
-          });
-        },
-        text(chunk) {
-          if (!inTable) return;
-          cellText += chunk.text;
-        },
-      })
-      .transform(stdRes)
-      .text();
+    await buildStandingsRewriter(teams, battingStats, pitchingStats).transform(stdRes).text();
 
     const data = { league, year, teams };
     await putCachedJson(env, cacheKey, data, getYearAwareTtl(year, 600), request);
@@ -286,7 +305,8 @@ async function handleStandings(league, request, env) {
 
 // ─── チーム間対戦成績 ─────────────────────────────────────────
 function normalizeTeamShortName(value) {
-  const normalized = normalizeText(value);
+  // チーム名の正規化（空白・改行を完全に除去してマッチング率を上げる）
+  const normalized = value.replace(/[ \t\r\n　]/g, '');
   return TEAM_SHORT_NAMES[normalized] ?? normalized;
 }
 
@@ -384,6 +404,8 @@ async function handleHeadToHead(league, request, env) {
     const teams = [];
     let tableIndex = -1;
     let inTable = false;
+    let tableDepth = 0;
+    let targetTableDepth = -1;
     let rowIndex = 0;
     let headers = [];
     let cells = [];
@@ -392,8 +414,9 @@ async function handleHeadToHead(league, request, env) {
 
     function pushCell() {
       const text = normalizeText(cellText);
-      if (currentCellTag === 'th') headers.push(text);
-      if (currentCellTag === 'td') cells.push(text);
+      if (currentCellTag === 'th' || rowIndex === 0) headers.push(text);
+      // rowIndex > 0 の時だけデータセルとして扱う
+      if (currentCellTag === 'td' && rowIndex > 0) cells.push(text);
       cellText = '';
       currentCellTag = null;
     }
@@ -401,25 +424,34 @@ async function handleHeadToHead(league, request, env) {
     await new HTMLRewriter()
       .on('table', {
         element(el) {
-          const className = el.getAttribute('class') ?? '';
-          if (!className.includes('tablefix2')) return;
-          tableIndex++;
-          if (tableIndex > 1) return;
-
-          inTable = true;
-          rowIndex = 0;
-          headers = [];
+          tableDepth++;
+          if (targetTableDepth === -1) {
+            const className = el.getAttribute('class') ?? '';
+            if (className.includes('tablefix2') || className.includes('stdtblSubmain')) {
+              tableIndex++;
+              if (tableIndex <= 1) {
+                inTable = true;
+                targetTableDepth = tableDepth;
+                rowIndex = 0;
+                headers = [];
+              }
+            }
+          }
           el.onEndTag(() => {
-            inTable = false;
+            if (tableDepth === targetTableDepth) {
+              inTable = false;
+              targetTableDepth = -1;
+            }
+            tableDepth--;
           });
         },
       })
       .on('tr', {
         element(el) {
-          if (!inTable || tableIndex > 1) return;
+          if (!inTable || tableDepth !== targetTableDepth) return;
           cells = [];
           el.onEndTag(() => {
-            if (!inTable || tableIndex > 1) return;
+            if (!inTable || tableDepth !== targetTableDepth) return;
             if (rowIndex > 0 && cells[0]) {
               const teamName = normalizeTeamShortName(cells[0]);
               const team = teams.find(item => item.name === teamName) ?? {
@@ -448,26 +480,26 @@ async function handleHeadToHead(league, request, env) {
       })
       .on('th', {
         element(el) {
-          if (!inTable || tableIndex > 1) return;
+          if (!inTable || tableDepth !== targetTableDepth) return;
           currentCellTag = 'th';
           cellText = '';
           el.onEndTag(pushCell);
         },
-        text(chunk) {
-          if (!inTable || currentCellTag !== 'th') return;
-          cellText += chunk.text;
-        },
       })
       .on('td', {
         element(el) {
-          if (!inTable || tableIndex > 1) return;
+          if (!inTable || tableDepth !== targetTableDepth) return;
           currentCellTag = 'td';
           cellText = '';
           el.onEndTag(pushCell);
         },
+      })
+      .on('*', {
         text(chunk) {
-          if (!inTable || currentCellTag !== 'td') return;
-          cellText += chunk.text;
+          if (!inTable || tableDepth < targetTableDepth) return;
+          if (currentCellTag) {
+            cellText += chunk.text;
+          }
         },
       })
       .transform(res)
@@ -579,10 +611,23 @@ const BATTING_FIELDS = {
   22: 'slg', 23: 'obp',
 };
 
+// 2024年度以前のテーブル構造に対応
+const BATTING_FIELDS_LEGACY = {
+  0: 'rank', 1: 'name', 2: 'team', 3: 'avg', 4: 'games',
+  8: 'hits', 11: 'hr', 13: 'rbi', 14: 'sb',
+  23: 'slg', 24: 'obp',
+};
+
 const PITCHING_FIELDS = {
   0: 'rank', 1: 'name_raw', 2: 'era', 3: 'games',
   4: 'wins', 5: 'losses', 6: 'saves',
   14: 'ip', 20: 'so',
+};
+
+const PITCHING_FIELDS_LEGACY = {
+  0: 'rank', 1: 'name', 2: 'team', 3: 'era', 4: 'games',
+  5: 'wins', 6: 'losses', 7: 'saves',
+  15: 'ip', 22: 'so',
 };
 
 function mapCells(cells, fields) {
@@ -603,26 +648,55 @@ function mapCells(cells, fields) {
     }
     delete obj.name_raw;
   }
+
+  // チーム名の括弧除去 (例: "(神)" -> "神")
+  if (obj.team) {
+    obj.team = obj.team.replace(/[()（）]/g, '').trim();
+  }
   
   return obj;
 }
 
-function buildRewriter(players, fields) {
+function buildRewriter(players, fields, isLegacy = false) {
   let inTable = false;
+  let isTargetRow = false;
   let rowIndex = 0;
   let cells = [];
   let cellText = '';
 
-  return new HTMLRewriter()
-    .on('table', {
+  const rewriter = new HTMLRewriter();
+
+  if (isLegacy) {
+    // 2024以前: table classなし、tr class="ststats"
+    rewriter.on('tr', {
+      element(el) {
+        const className = el.getAttribute('class') ?? '';
+        if (className === 'ststats') {
+          inTable = true;
+          isTargetRow = true;
+          cells = [];
+        } else {
+          isTargetRow = false;
+        }
+        el.onEndTag(() => {
+          if (isTargetRow && cells.length > 0) {
+            players.push(mapCells(cells, fields));
+          }
+          inTable = false;
+          isTargetRow = false;
+        });
+      }
+    });
+  } else {
+    // 2026+: NpbSt または tablefix2
+    rewriter.on('table', {
       element(el) {
         const className = el.getAttribute('class') ?? '';
         inTable = className.includes('NpbSt') || className.includes('tablefix2');
         if (inTable) rowIndex = 0;
         el.onEndTag(() => { inTable = false; });
       },
-    })
-    .on('tr', {
+    }).on('tr', {
       element(el) {
         if (!inTable) return;
         cells = [];
@@ -635,21 +709,26 @@ function buildRewriter(players, fields) {
           rowIndex++;
         });
       },
-    })
-    .on('td', {
-      element(el) {
-        if (!inTable) return;
-        cellText = '';
-        el.onEndTag(() => {
-          if (!inTable) return;
-          cells.push(cellText.replace(/\s+/g, ' ').trim());
-        });
-      },
-      text(chunk) {
-        if (!inTable) return;
-        cellText += chunk.text;
-      },
     });
+  }
+
+  // td handling is same for both
+  rewriter.on('td', {
+    element(el) {
+      if (!inTable) return;
+      cellText = '';
+      el.onEndTag(() => {
+        if (!inTable) return;
+        cells.push(cellText.replace(/\s+/g, ' ').trim());
+      });
+    },
+    text(chunk) {
+      if (!inTable) return;
+      cellText += chunk.text;
+    },
+  });
+
+  return rewriter;
 }
 
 async function handleStats(type, league, request, env) {
@@ -662,10 +741,17 @@ async function handleStats(type, league, request, env) {
   const cached = await getCachedJson(env, cacheKey, request);
   if (cached) return Response.json(cached);
 
+  const isLegacy = year <= 2024;
   const leagueCode = league === 'cl' ? 'c' : 'p';
   const prefix = type === 'batting' ? 'bat' : 'pit';
   const url = `https://npb.jp/bis/${year}/stats/${prefix}_${leagueCode}.html`;
-  const fields = type === 'batting' ? BATTING_FIELDS : PITCHING_FIELDS;
+  
+  let fields;
+  if (type === 'batting') {
+    fields = isLegacy ? BATTING_FIELDS_LEGACY : BATTING_FIELDS;
+  } else {
+    fields = isLegacy ? PITCHING_FIELDS_LEGACY : PITCHING_FIELDS;
+  }
 
   try {
     const res = await fetch(url, {
@@ -679,7 +765,7 @@ async function handleStats(type, league, request, env) {
     }
 
     const players = [];
-    await buildRewriter(players, fields).transform(res).text();
+    await buildRewriter(players, fields, isLegacy).transform(res).text();
 
     const data = { league, type, year, players };
     await putCachedJson(env, cacheKey, data, getYearAwareTtl(year, 1800), request);
