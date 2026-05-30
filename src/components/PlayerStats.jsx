@@ -45,6 +45,8 @@ const TEAM_MAP = {
   'ソ': 'ソフトバンク', '日': '日本ハム', '楽': '楽天', 'ロ': 'ロッテ', 'オ': 'オリックス', '西': '西武'
 };
 
+const TEAM_FILTERS = Object.keys(TEAMS).filter(name => name !== '横浜DeNA');
+
 function StatsTable({ players, type, sortConfig, onSort }) {
   const cols = type === 'batting' ? BATTING_COLS : PITCHING_COLS;
   
@@ -110,6 +112,8 @@ export default function PlayerStats() {
   const [errorDetail, setErrorDetail] = useState(null);
   const [lastUpdated, setLastUpdated] = useState({});
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [playerNameFilter, setPlayerNameFilter] = useState('');
+  const [selectedTeams, setSelectedTeams] = useState([]);
   const { isFavorite } = useFavorites();
   
   // ソート設定: 初期状態は順位の昇順
@@ -153,14 +157,39 @@ export default function PlayerStats() {
   }, [cacheKey, cache, type, league, year]);
 
   const handleSort = (key) => {
-    setSortConfig(prev => ({
-      key,
-      direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
-    }));
+    setSortConfig(prev => {
+      if (prev.key !== key) {
+        return { key, direction: 'asc' };
+      }
+      if (prev.direction === 'asc') {
+        return { key, direction: 'desc' };
+      }
+      return { key: 'rank', direction: 'asc' };
+    });
+  };
+
+  const toggleTeamFilter = (team) => {
+    setSelectedTeams(prev => (
+      prev.includes(team)
+        ? prev.filter(t => t !== team)
+        : [...prev, team]
+    ));
   };
 
   const sortedPlayers = useMemo(() => {
     let raw = cache[cacheKey] || [];
+
+    const trimmedName = playerNameFilter.trim();
+    if (trimmedName) {
+      raw = raw.filter(p => String(p.name || '').includes(trimmedName));
+    }
+
+    if (selectedTeams.length > 0) {
+      raw = raw.filter(p => {
+        const fullTeamName = TEAM_MAP[p.team] || p.team;
+        return selectedTeams.includes(fullTeamName);
+      });
+    }
     
     // お気に入りフィルタ
     if (showFavoritesOnly) {
@@ -191,7 +220,7 @@ export default function PlayerStats() {
         ? aVal.localeCompare(bVal, 'ja') 
         : bVal.localeCompare(aVal, 'ja');
     });
-  }, [cache, cacheKey, sortConfig, isFavorite, showFavoritesOnly]);
+  }, [cache, cacheKey, sortConfig, isFavorite, showFavoritesOnly, playerNameFilter, selectedTeams]);
 
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 12 }, (_, i) => currentYear - i);
@@ -248,6 +277,30 @@ export default function PlayerStats() {
           />
           お気に入りチームのみ
         </label>
+      </div>
+
+      <div className="controls-row" style={{ marginTop: '12px', alignItems: 'center' }}>
+        <input
+          type="search"
+          value={playerNameFilter}
+          onChange={(e) => setPlayerNameFilter(e.target.value)}
+          placeholder="選手名で絞り込み"
+          className="year-select"
+          style={{ minWidth: '180px' }}
+        />
+        <div className="tab-bar" style={{ marginBottom: 0 }}>
+          {TEAM_FILTERS.map(team => (
+            <label key={team} className={`tab-btn ${selectedTeams.includes(team) ? 'active' : ''}`}>
+              <input
+                type="checkbox"
+                checked={selectedTeams.includes(team)}
+                onChange={() => toggleTeamFilter(team)}
+                style={{ marginRight: '4px' }}
+              />
+              {team}
+            </label>
+          ))}
+        </div>
       </div>
 
       {loading && <div className="status-msg">読み込み中...</div>}
