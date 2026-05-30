@@ -186,15 +186,25 @@ async function handleStandings(league, request, env) {
 
   // セ・パ リーグは npb.jp からスクレイピング
   const leagueCode = league === 'cl' ? 'c' : 'p';
-  const url = `https://npb.jp/bis/${year}/stats/std_${leagueCode}.html`;
+  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+  const stdUrl = `https://npb.jp/bis/${year}/stats/std_${leagueCode}.html`;
+  const tmbUrl = `https://npb.jp/bis/${year}/stats/tmb_${leagueCode}.html`;
+  const tmpUrl = `https://npb.jp/bis/${year}/stats/tmp_${leagueCode}.html`;
 
   try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
-    });
-    if (!res.ok) throw new Error(`npb.jp returned ${res.status}`);
+    const [stdRes, tmbRes, tmpRes] = await Promise.all([
+      fetch(stdUrl, { headers: { 'User-Agent': UA } }),
+      fetch(tmbUrl, { headers: { 'User-Agent': UA } }),
+      fetch(tmpUrl, { headers: { 'User-Agent': UA } }),
+    ]);
+
+    if (!stdRes.ok) throw new Error(`npb.jp (std) returned ${stdRes.status}`);
+
+    // 打撃・投手成績を並列でパース
+    const [battingStats, pitchingStats] = await Promise.all([
+      parseExtraStats(tmbRes, 'tablefix2', 0, { 1: 'avg', 9: 'hr', 12: 'sb' }),
+      parseExtraStats(tmpRes, 'tablefix2', 0, { 1: 'era' }),
+    ]);
 
     const teams = [];
     let inTable = false;
@@ -230,6 +240,16 @@ async function handleStandings(league, request, env) {
                 team[field] = cells[idx] ?? '-';
               }
               team.rank = rowIndex;
+
+              // 追加成績をマージ
+              const normalizedName = normalizeTeamShortName(team.name);
+              const bStats = battingStats[normalizedName] || {};
+              const pStats = pitchingStats[normalizedName] || {};
+              team.avg = bStats.avg || '-';
+              team.hr = bStats.hr || '-';
+              team.sb = bStats.sb || '-';
+              team.era = pStats.era || '-';
+
               teams.push(team);
             }
             rowIndex++;
@@ -250,7 +270,7 @@ async function handleStandings(league, request, env) {
           cellText += chunk.text;
         },
       })
-      .transform(res)
+      .transform(stdRes)
       .text();
 
     const data = { league, year, teams };
@@ -268,6 +288,62 @@ async function handleStandings(league, request, env) {
 function normalizeTeamShortName(value) {
   const normalized = normalizeText(value);
   return TEAM_SHORT_NAMES[normalized] ?? normalized;
+}
+
+async function parseExtraStats(res, tableClass, teamNameIdx, fieldMappings) {
+  if (!res.ok) return {};
+  const stats = {};
+  let inTable = false;
+  let rowIndex = 0;
+  let cells = [];
+  let cellText = '';
+
+  await new HTMLRewriter()
+    .on('table', {
+      element(el) {
+        const className = el.getAttribute('class') ?? '';
+        if (className.includes(tableClass)) {
+          inTable = true;
+          rowIndex = 0;
+        }
+      },
+    })
+    .on('tr', {
+      element(el) {
+        if (!inTable) return;
+        cells = [];
+        el.onEndTag(() => {
+          if (!inTable) return;
+          if (rowIndex > 0 && cells.length > teamNameIdx) {
+            const teamName = normalizeTeamShortName(cells[teamNameIdx]);
+            const s = {};
+            for (const [idx, field] of Object.entries(fieldMappings)) {
+              s[field] = cells[idx] ?? '-';
+            }
+            stats[teamName] = s;
+          }
+          rowIndex++;
+        });
+      },
+    })
+    .on('td', {
+      element(el) {
+        if (!inTable) return;
+        cellText = '';
+        el.onEndTag(() => {
+          if (!inTable) return;
+          cells.push(cellText.trim());
+        });
+      },
+      text(chunk) {
+        if (!inTable) return;
+        cellText += chunk.text;
+      },
+    })
+    .transform(res)
+    .text();
+
+  return stats;
 }
 
 function normalizeHeadtoHeadValue(value) {
