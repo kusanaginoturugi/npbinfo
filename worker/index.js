@@ -281,6 +281,10 @@ async function handleStandingsOg(league, request, env) {
     'Cache-Control': 'public, max-age=300',
   };
 
+  if (request.method === 'HEAD') {
+    return new Response(null, { headers });
+  }
+
   try {
     const res = await handleStandings(league, request, env);
     if (!res.ok) throw new Error(`standings ${res.status}`);
