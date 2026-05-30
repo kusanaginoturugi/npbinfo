@@ -253,12 +253,12 @@ async function handleStandings(league, request, env) {
   if (league === 'cp' || league === 'op') {
     try {
       const specialStandings = await fetchSpecialStandings(league, year);
-      const updateNote = league === 'cp'
-        ? await buildInterleagueUpdateNoteFromStandings(year, specialStandings.teams, request, env)
-        : null;
-      const teams = specialStandings.teams;
+      const interleagueData = league === 'cp'
+        ? await buildInterleagueStandingsData(year, specialStandings.teams, specialStandings.finishedGames, request, env)
+        : { teams: specialStandings.teams, updateNote: null };
+      const teams = interleagueData.teams;
       const data = { league, year, teams };
-      if (updateNote) data.updateNote = updateNote;
+      if (interleagueData.updateNote) data.updateNote = interleagueData.updateNote;
       await putCachedJson(env, cacheKey, data, getYearAwareTtl(year, 600), request);
       return Response.json(data);
     } catch (err) {
@@ -383,10 +383,14 @@ async function fetchSpecialStandings(league, year) {
   });
   if (!res.ok) throw new Error(`npb.jp (${file}) returned ${res.status}`);
 
+  const html = await res.text();
   const teams = [];
-  await buildSpecialStandingsRewriter(teams).transform(res).text();
+  await buildSpecialStandingsRewriter(teams).transform(new Response(html)).text();
   applyCompetitionRanks(teams);
-  return { teams };
+  return {
+    teams,
+    finishedGames: league === 'cp' ? parseHeaderFinishedGames(html) : [],
+  };
 }
 
 function shiftYearMonth(year, month, delta) {
@@ -430,11 +434,54 @@ function matchesTargetGameCounts(currentCounts, targetCounts) {
   return true;
 }
 
-async function buildInterleagueUpdateNoteFromStandings(year, teams, request, env) {
-  const targetCounts = buildTargetGameCounts(teams);
-  if (targetCounts.size === 0) return null;
+function dedupeGames(games) {
+  const seen = new Set();
+  const deduped = [];
+  for (const game of games) {
+    const key = `${game.date}:${normalizeSpecialStandingsTeamName(game.homeTeam)}:${normalizeSpecialStandingsTeamName(game.awayTeam)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(game);
+  }
+  return deduped;
+}
+
+function parseHeaderDate(html) {
+  const match = String(html ?? '').match(/<div class="score_box date"><div>\s*(\d{4})<br>\s*(\d{1,2})\/(\d{1,2})/);
+  if (!match) return null;
+  return `${match[1]}-${String(Number(match[2])).padStart(2, '0')}-${String(Number(match[3])).padStart(2, '0')}`;
+}
+
+function parseHeaderFinishedGames(html) {
+  const date = parseHeaderDate(html);
+  if (!date) return [];
 
   const games = [];
+  const scoreBoxPattern = /<div class="score_box">\s*<a href="[^"]+">\s*<div>([\s\S]*?)<\/div>\s*<\/a>\s*<\/div>/g;
+  let match;
+  while ((match = scoreBoxPattern.exec(String(html ?? ''))) !== null) {
+    const block = match[1];
+    if (!block.includes('試合終了')) continue;
+
+    const teams = [...block.matchAll(/<img[^>]+alt="([^"]+)"/g)].map(item => normalizeSpecialStandingsTeamName(item[1]));
+    const score = block.match(/<div class="score">(\d+)-(\d+)<\/div>/);
+    if (teams.length < 2 || !score) continue;
+
+    games.push({
+      date,
+      homeTeam: teams[0],
+      awayTeam: teams[1],
+      homeScore: score[1],
+      awayScore: score[2],
+      status: '終了',
+    });
+  }
+
+  return games.filter(isInterleagueGame);
+}
+
+async function fetchFinishedInterleagueGames(year, extraGames, request, env) {
+  const games = [...(extraGames ?? [])];
   for (const month of ['05', '06']) {
     const scheduleRes = await handleSchedule(`${year}-${month}`, request, env);
     if (!scheduleRes.ok) continue;
@@ -443,6 +490,11 @@ async function buildInterleagueUpdateNoteFromStandings(year, teams, request, env
       game.status === '終了' && game.date && isInterleagueGame(game)
     )));
   }
+  return dedupeGames(games).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function findDateForGameCounts(games, targetCounts) {
+  if (targetCounts.size === 0) return null;
 
   const currentCounts = new Map();
   const dates = [...new Set(games.map(game => game.date))].sort();
@@ -454,11 +506,111 @@ async function buildInterleagueUpdateNoteFromStandings(year, teams, request, env
       currentCounts.set(awayTeam, (currentCounts.get(awayTeam) ?? 0) + 1);
     }
     if (matchesTargetGameCounts(currentCounts, targetCounts)) {
-      return formatUpdateNoteFromDate(date);
+      return date;
     }
   }
 
   return null;
+}
+
+function toNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function formatPct(wins, losses) {
+  const denominator = wins + losses;
+  if (denominator === 0) return '-';
+  const value = wins / denominator;
+  if (value === 1) return '1.000';
+  return value.toFixed(3).replace(/^0/, '');
+}
+
+function formatGamesBehind(value) {
+  if (value === 0) return '-';
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function recalculateCompetitionStandings(teams) {
+  teams.sort((a, b) => {
+    const pctDiff = Number(b.pct === '-' ? -1 : b.pct) - Number(a.pct === '-' ? -1 : a.pct);
+    if (pctDiff !== 0) return pctDiff;
+    return toNumber(b.win) - toNumber(a.win);
+  });
+
+  const leader = teams[0];
+  const leaderWins = toNumber(leader?.win);
+  const leaderLosses = toNumber(leader?.lose);
+  for (const team of teams) {
+    const gamesBehind = ((leaderWins - toNumber(team.win)) + (toNumber(team.lose) - leaderLosses)) / 2;
+    team.gamesBehind = formatGamesBehind(gamesBehind);
+  }
+
+  applyCompetitionRanks(teams);
+}
+
+function applyFinishedGamesToStandings(teams, games) {
+  const standings = teams.map(team => ({
+    ...team,
+    playGameCount: toNumber(team.playGameCount),
+    win: toNumber(team.win),
+    lose: toNumber(team.lose),
+    draw: toNumber(team.draw),
+  }));
+  const byName = new Map(standings.map(team => [team.name, team]));
+
+  for (const game of games) {
+    const home = byName.get(normalizeSpecialStandingsTeamName(game.homeTeam));
+    const away = byName.get(normalizeSpecialStandingsTeamName(game.awayTeam));
+    const homeScore = Number(game.homeScore);
+    const awayScore = Number(game.awayScore);
+    if (!home || !away || !Number.isFinite(homeScore) || !Number.isFinite(awayScore)) continue;
+
+    home.playGameCount += 1;
+    away.playGameCount += 1;
+    if (homeScore > awayScore) {
+      home.win += 1;
+      away.lose += 1;
+    } else if (homeScore < awayScore) {
+      away.win += 1;
+      home.lose += 1;
+    } else {
+      home.draw += 1;
+      away.draw += 1;
+    }
+  }
+
+  for (const team of standings) {
+    team.playGameCount = String(team.playGameCount);
+    team.win = String(team.win);
+    team.lose = String(team.lose);
+    team.draw = String(team.draw);
+    team.pct = formatPct(toNumber(team.win), toNumber(team.lose));
+  }
+  recalculateCompetitionStandings(standings);
+  return standings;
+}
+
+async function buildInterleagueStandingsData(year, teams, extraGames, request, env) {
+  const targetCounts = buildTargetGameCounts(teams);
+  if (targetCounts.size === 0) return { teams, updateNote: null };
+
+  const games = await fetchFinishedInterleagueGames(year, extraGames, request, env);
+  const baseDate = findDateForGameCounts(games, targetCounts);
+  if (!baseDate) return { teams, updateNote: null };
+
+  const today = getTokyoDateValue();
+  const provisionalGames = games.filter(game => game.date > baseDate && game.date <= today);
+  if (provisionalGames.length === 0) {
+    return { teams, updateNote: formatUpdateNoteFromDate(baseDate) };
+  }
+
+  const provisionalTeams = applyFinishedGamesToStandings(teams, provisionalGames);
+  const latestDate = provisionalGames.reduce((max, game) => (game.date > max ? game.date : max), provisionalGames[0].date);
+  return {
+    teams: provisionalTeams,
+    updateNote: `[暫定] ${formatUpdateNoteFromDate(latestDate)}`,
+  };
 }
 
 function formatUpdateNoteFromDate(dateValue) {
