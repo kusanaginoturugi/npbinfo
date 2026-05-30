@@ -105,10 +105,10 @@ function RecentBadges({ games }) {
         let symbol = '△';
         let className = 'draw';
         if (g.won === true) {
-          symbol = '◯';
+          symbol = '●';
           className = 'win';
         } else if (g.won === false) {
-          symbol = '●';
+          symbol = '○';
           className = 'lose';
         }
         const title = `${g.date} vs${g.vsTeam} (${g.won === true ? '勝' : g.won === false ? '敗' : '分'})`;

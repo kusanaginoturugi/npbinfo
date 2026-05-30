@@ -1000,19 +1000,27 @@ body {
   font-size: 8px;
   font-weight: 800;
   line-height: 1;
+  border: 1px solid #000;
 }
 
 .recent-badge.win {
-  background: #22c55e;
+  background: #000;
   color: #fff;
 }
 
 .recent-badge.lose {
-  background: #ef4444;
-  color: #fff;
+  background: #fff;
+  color: #000;
 }
 
 .recent-badge.draw {
-  background: #94a3b8;
+  background: transparent;
+  color: #000;
+}
+
+[data-theme="dark"] .recent-badge.lose,
+[data-theme="dark"] .recent-badge.draw {
+  background: transparent;
   color: #fff;
+  border-color: #fff;
 }
