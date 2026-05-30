@@ -532,6 +532,191 @@ body {
   font-size: 12px;
 }
 
+/* ─── Stadiums ────────────────────────────────────────────── */
+.stadium-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-areas:
+    "list map"
+    "list detail";
+  gap: 16px;
+  align-items: start;
+}
+
+.stadium-list {
+  grid-area: list;
+  display: grid;
+  gap: 8px;
+}
+
+.stadium-list-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-table);
+  border-radius: 6px;
+  background: var(--bg-row-even);
+  color: var(--color-text);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+
+.stadium-list-item:hover {
+  background: var(--bg-row-hover);
+  border-color: var(--border-tab-active);
+}
+
+.stadium-list-item.active {
+  background: var(--bg-tab-active);
+  border-color: var(--border-tab-active);
+  transform: translateX(2px);
+}
+
+.stadium-team-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,0.1);
+}
+
+.stadium-list-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stadium-list-name,
+.stadium-list-team {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stadium-list-name {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.stadium-list-team {
+  color: var(--color-footer);
+  font-size: 12px;
+}
+
+.stadium-map-panel {
+  grid-area: map;
+  border: 1px solid var(--border-table);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-row-odd);
+}
+
+.stadium-map {
+  height: 420px;
+  width: 100%;
+}
+
+.stadium-marker {
+  background: transparent;
+  border: 0;
+}
+
+.stadium-marker span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.stadium-marker.selected span {
+  width: 42px;
+  height: 42px;
+  border-width: 3px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+}
+
+.stadium-detail {
+  grid-area: detail;
+  border: 1px solid var(--border-table);
+  border-radius: 6px;
+  background: var(--bg-row-even);
+  padding: 16px;
+}
+
+[data-theme="dark"] .stadium-detail,
+[data-theme="dark"] .stadium-list-item {
+  background: var(--bg-row-odd);
+}
+
+.stadium-detail-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.stadium-detail-heading h3 {
+  font-size: 18px;
+  line-height: 1.35;
+  color: var(--color-heading);
+}
+
+.stadium-detail-heading p {
+  color: var(--color-footer);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.stadium-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+
+.stadium-detail-row dt {
+  color: var(--color-footer);
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+.stadium-detail-row dd {
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.stadium-link {
+  display: inline-flex;
+  margin-top: 14px;
+  color: var(--color-tab-active);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.stadium-link:hover {
+  text-decoration: underline;
+}
+
+.leaflet-container {
+  font-family: inherit;
+}
+
 /* ─── Status / Error ───────────────────────────────────────── */
 .status-msg {
   text-align: center;
@@ -559,4 +744,80 @@ body {
   border-top: 1px solid var(--border-footer);
   background: var(--bg-footer);
   transition: background 0.2s, border-color 0.2s;
+}
+
+@media (max-width: 760px) {
+  .header-inner {
+    height: auto;
+    min-height: 60px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    flex-wrap: wrap;
+  }
+
+  .app-title {
+    font-size: 18px;
+  }
+
+  .nav-tabs {
+    order: 3;
+    flex-basis: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .nav-tab {
+    flex: 0 0 auto;
+    padding: 7px 12px;
+  }
+
+  .app-main {
+    padding: 16px 12px;
+  }
+
+  .section {
+    padding: 14px;
+  }
+
+  .stadium-layout {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "map"
+      "list"
+      "detail";
+  }
+
+  .stadium-map {
+    height: 320px;
+  }
+
+  .stadium-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stadium-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .schedule-match {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .schedule-team-away {
+    justify-content: flex-start;
+  }
+
+  .schedule-score,
+  .schedule-time {
+    text-align: left;
+    justify-content: flex-start;
+  }
+
+  .stadium-list {
+    grid-template-columns: 1fr;
+  }
 }
