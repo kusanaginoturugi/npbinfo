@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { Suspense, lazy, useMemo, useState, useEffect } from 'react';
 import { getContrastColor, getTeamInfo } from '../data/teams';
 import { useFavorites } from '../hooks/useFavorites';
 import { apiCache } from '../utils/apiCache';
@@ -8,6 +8,8 @@ const LEAGUES = [
   { key: 'pl', label: 'パシフィック・リーグ', color: '#c8102e' },
   { key: 'cp', label: 'セ・パ交流戦', color: '#2d6a2d' },
 ];
+const StandingsRadar = lazy(() => import('./charts/StandingsRadar'));
+const StandingsBars = lazy(() => import('./charts/StandingsBars'));
 
 function TeamBadge({ name }) {
   const info = getTeamInfo(name);
@@ -107,6 +109,7 @@ function StandingsTable({ data, isFavorite, toggleFavorite }) {
 
 export default function Standings() {
   const [activeLeague, setActiveLeague] = useState('cl');
+  const [viewMode, setViewMode] = useState('table');
   const [year, setYear] = useState(new Date().getFullYear());
   const [data, setData] = useState({});
   const [loading, setLoading] = useState(false);
@@ -144,6 +147,11 @@ export default function Standings() {
   }, [activeLeague, year, data, cacheKey]);
 
   const activeInfo = LEAGUES.find(l => l.key === activeLeague);
+  const standingsRows = useMemo(() => {
+    if (!data[cacheKey]) return [];
+    return Array.isArray(data[cacheKey]) ? data[cacheKey] : data[cacheKey].teams ?? [];
+  }, [cacheKey, data]);
+  const graphAvailable = activeLeague === 'cl' || activeLeague === 'pl';
 
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 12 }, (_, i) => currentYear - i);
@@ -177,7 +185,28 @@ export default function Standings() {
             <option key={y} value={y}>{y}年</option>
           ))}
         </select>
+        <div className="tab-bar standings-mode-switch">
+          <button
+            type="button"
+            className={`tab-btn ${viewMode === 'table' ? 'active' : ''}`}
+            onClick={() => setViewMode('table')}
+          >
+            表
+          </button>
+          <button
+            type="button"
+            className={`tab-btn ${viewMode === 'charts' ? 'active' : ''}`}
+            onClick={() => setViewMode('charts')}
+            disabled={!graphAvailable}
+            title={graphAvailable ? 'グラフ表示' : 'グラフはセ/パリーグのみ'}
+          >
+            グラフ
+          </button>
+        </div>
       </div>
+      {!graphAvailable && viewMode === 'charts' && (
+        <div className="status-msg">グラフ表示はセ・パリーグ選択時のみ有効です。</div>
+      )}
 
       {loading && <div className="status-msg">読み込み中...</div>}
       {error && (
@@ -189,11 +218,21 @@ export default function Standings() {
       )}
       {!loading && !error && data[cacheKey] && (
         <>
-          <StandingsTable 
-            data={Array.isArray(data[cacheKey]) ? data[cacheKey] : data[cacheKey].teams ?? []} 
-            isFavorite={isFavorite}
-            toggleFavorite={toggleFavorite}
-          />
+          {viewMode === 'table' && (
+            <StandingsTable
+              data={standingsRows}
+              isFavorite={isFavorite}
+              toggleFavorite={toggleFavorite}
+            />
+          )}
+          {viewMode === 'charts' && graphAvailable && (
+            <Suspense fallback={<div className="status-msg">グラフ読み込み中...</div>}>
+              <div className="standings-charts">
+                <StandingsRadar teams={standingsRows} />
+                <StandingsBars teams={standingsRows} />
+              </div>
+            </Suspense>
+          )}
           {lastUpdated[cacheKey] && (
             <div style={{ marginTop: '12px', fontSize: '11px', color: 'var(--color-footer)', textAlign: 'right' }}>
               取得日時: {formatTimestamp(lastUpdated[cacheKey])}

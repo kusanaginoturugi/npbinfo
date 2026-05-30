@@ -405,6 +405,63 @@ body {
   user-select: none;
 }
 
+.standings-mode-switch {
+  margin-left: auto;
+  margin-bottom: 0;
+}
+
+.standings-mode-switch .tab-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.standings-charts {
+  display: grid;
+  gap: 14px;
+}
+
+.chart-card {
+  border: 1px solid var(--border-table);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--bg-row-even);
+}
+
+[data-theme="dark"] .chart-card {
+  background: var(--bg-row-odd);
+}
+
+.chart-card h3 {
+  font-size: 14px;
+  color: var(--color-heading);
+}
+
+.chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.chart-switches {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chart-shell {
+  width: 100%;
+  min-height: 380px;
+}
+
+.chart-note {
+  margin-top: 8px;
+  color: var(--color-footer);
+  font-size: 12px;
+}
+
 /* ─── Schedule ─────────────────────────────────────────────── */
 .schedule-list {
   display: grid;
@@ -959,4 +1016,3 @@ body {
   background: #94a3b8;
   color: #fff;
 }
-
