@@ -90,13 +90,6 @@ function getYearAwareTtl(year, currentTtl) {
   return year < new Date().getFullYear() ? null : currentTtl;
 }
 
-function extractUpdateNoteFromHtml(html) {
-  const match = String(html ?? '').match(/<div[^>]*id=["']stupdate["'][^>]*>([\s\S]*?)<\/div>/i);
-  if (!match) return null;
-  const text = normalizeText(match[1].replace(/<[^>]+>/g, ' '));
-  return text || null;
-}
-
 function isValidDateValue(dateValue) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return false;
 
@@ -264,7 +257,11 @@ async function handleStandings(league, request, env) {
         { headers: { 'User-Agent': 'npbinfo-app/1.0' } }
       );
       if (!res.ok) throw new Error(`upstream ${res.status}`);
-      const data = await res.json();
+      const upstream = await res.json();
+      const updateNote = await buildStandingsUpdateNote(year, request, env);
+      const teams = Array.isArray(upstream) ? upstream : (upstream?.teams ?? []);
+      const data = { league, year, teams };
+      if (updateNote) data.updateNote = updateNote;
       await putCachedJson(env, cacheKey, data, getYearAwareTtl(year, 600), request);
       return Response.json(data);
     } catch (err) {
@@ -297,7 +294,7 @@ async function handleStandings(league, request, env) {
     ]);
 
     const stdHtml = await stdRes.text();
-    const updateNote = extractUpdateNoteFromHtml(stdHtml);
+    const updateNote = await buildStandingsUpdateNote(year, request, env);
     const teams = [];
     await buildStandingsRewriter(teams, battingStats, pitchingStats).transform(new Response(stdHtml)).text();
 
@@ -311,6 +308,45 @@ async function handleStandings(league, request, env) {
       { status: 502 }
     );
   }
+}
+
+function shiftYearMonth(year, month, delta) {
+  const date = new Date(Date.UTC(year, month - 1 + delta, 1));
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+  };
+}
+
+function formatUpdateNoteFromDate(dateValue) {
+  const [y, m, d] = String(dateValue).split('-').map(Number);
+  if (!y || !m || !d) return null;
+  return `${y}/${m}/${d} 試合まで反映`;
+}
+
+async function buildStandingsUpdateNote(year, request, env) {
+  const tokyoToday = getTokyoDateValue();
+  const [currentYear, currentMonth] = tokyoToday.split('-').map(Number);
+  const startMonth = year < currentYear ? 12 : currentMonth;
+
+  for (let i = 0; i < 3; i += 1) {
+    const target = shiftYearMonth(year, startMonth, -i);
+    const monthParam = `${target.year}-${String(target.month).padStart(2, '0')}`;
+    const scheduleRes = await handleSchedule(monthParam, request, env);
+    if (!scheduleRes.ok) continue;
+
+    const schedule = await scheduleRes.json();
+    const finishedDates = (schedule.games ?? [])
+      .filter(game => game.status === '終了' && game.date)
+      .map(game => game.date);
+    if (finishedDates.length === 0) continue;
+
+    const latestDate = finishedDates.reduce((max, value) => (value > max ? value : max), finishedDates[0]);
+    const note = formatUpdateNoteFromDate(latestDate);
+    if (note) return note;
+  }
+
+  return null;
 }
 
 // ─── チーム間対戦成績 ─────────────────────────────────────────
@@ -821,13 +857,10 @@ async function handleStats(type, league, request, env) {
       throw new Error(`npb.jp returned ${res.status} for URL: ${url}`);
     }
 
-    const html = await res.text();
-    const updateNote = extractUpdateNoteFromHtml(html);
     const players = [];
-    await buildRewriter(players, fields, isLegacy).transform(new Response(html)).text();
+    await buildRewriter(players, fields, isLegacy).transform(res).text();
 
     const data = { league, type, year, players };
-    if (updateNote) data.updateNote = updateNote;
     await putCachedJson(env, cacheKey, data, getYearAwareTtl(year, 1800), request);
     return Response.json(data);
   } catch (err) {
