@@ -27,6 +27,40 @@ function normalizeText(text) {
   return text.replace(/&nbsp;/g, ' ').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function skipCache(request) {
+  return new URL(request.url).searchParams.get('nocache') === '1';
+}
+
+async function getCachedJson(env, key, request) {
+  if (skipCache(request) || !env.CACHE) return null;
+
+  try {
+    return await env.CACHE.get(key, 'json');
+  } catch (err) {
+    console.warn(`KV get failed for ${key}: ${err.message}`);
+    return null;
+  }
+}
+
+async function putCachedJson(env, key, data, ttl, request) {
+  if (skipCache(request) || !env.CACHE) return;
+
+  try {
+    await env.CACHE.put(key, JSON.stringify(data), { expirationTtl: ttl });
+  } catch (err) {
+    console.warn(`KV put failed for ${key}: ${err.message}`);
+  }
+}
+
+function getScheduleTtl(year, month) {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+
+  if (year === currentYear && month === currentMonth) return 300;
+  return 86400;
+}
+
 // ─── 順位表 ──────────────────────────────────────────────────
 const VALID_LEAGUES = new Set(['cl', 'pl', 'cp', 'op']);
 
@@ -35,12 +69,15 @@ const STANDINGS_FIELDS = {
   4: 'draw', 5: 'pct', 6: 'gamesBehind',
 };
 
-async function handleStandings(league, request) {
+async function handleStandings(league, request, env) {
   if (!VALID_LEAGUES.has(league)) {
     return new Response('Not Found', { status: 404 });
   }
 
   const year = getYear(request.url);
+  const cacheKey = `standings:${league}:${year}`;
+  const cached = await getCachedJson(env, cacheKey, request);
+  if (cached) return Response.json(cached);
 
   // 交流戦、オープン戦はとりあえず既存のAPI（過去年度未対応）を叩く
   if (league === 'cp' || league === 'op') {
@@ -51,6 +88,7 @@ async function handleStandings(league, request) {
       );
       if (!res.ok) throw new Error(`upstream ${res.status}`);
       const data = await res.json();
+      await putCachedJson(env, cacheKey, data, 600, request);
       return Response.json(data);
     } catch (err) {
       return Response.json({ error: '取得エラー', detail: err.message }, { status: 502 });
@@ -126,7 +164,9 @@ async function handleStandings(league, request) {
       .transform(res)
       .text();
 
-    return Response.json({ league, year, teams });
+    const data = { league, year, teams };
+    await putCachedJson(env, cacheKey, data, 600, request);
+    return Response.json(data);
   } catch (err) {
     return Response.json(
       { error: '順位表の取得に失敗しました', detail: err.message },
@@ -216,12 +256,16 @@ function buildRewriter(players, fields) {
     });
 }
 
-async function handleStats(type, league, request) {
+async function handleStats(type, league, request, env) {
   if (!['batting', 'pitching'].includes(type) || !['cl', 'pl'].includes(league)) {
     return new Response('Not Found', { status: 404 });
   }
 
   const year = getYear(request.url);
+  const cacheKey = `stats:${type}:${league}:${year}`;
+  const cached = await getCachedJson(env, cacheKey, request);
+  if (cached) return Response.json(cached);
+
   const leagueCode = league === 'cl' ? 'c' : 'p';
   const prefix = type === 'batting' ? 'bat' : 'pit';
   const url = `https://npb.jp/bis/${year}/stats/${prefix}_${leagueCode}.html`;
@@ -241,7 +285,9 @@ async function handleStats(type, league, request) {
     const players = [];
     await buildRewriter(players, fields).transform(res).text();
 
-    return Response.json({ league, type, year, players });
+    const data = { league, type, year, players };
+    await putCachedJson(env, cacheKey, data, 1800, request);
+    return Response.json(data);
   } catch (err) {
     return Response.json(
       { error: 'データの取得に失敗しました', detail: err.message },
@@ -257,17 +303,22 @@ function getGameStatus(game) {
   return '試合前';
 }
 
-async function handleSchedule(monthParam) {
+async function handleSchedule(monthParam, request, env) {
   const match = monthParam?.match(/^(\d{4})-(\d{2})$/);
   if (!match) {
     return new Response('Not Found', { status: 404 });
   }
 
   const year = parseInt(match[1], 10);
+  const monthNumber = parseInt(match[2], 10);
   const month = match[2];
-  if (!getAvailableYears().includes(year) || parseInt(month, 10) < 1 || parseInt(month, 10) > 12) {
+  if (!getAvailableYears().includes(year) || monthNumber < 1 || monthNumber > 12) {
     return new Response('Not Found', { status: 404 });
   }
+
+  const cacheKey = `schedule:${year}-${month}`;
+  const cached = await getCachedJson(env, cacheKey, request);
+  if (cached) return Response.json(cached);
 
   const url = `https://npb.jp/games/${year}/schedule_${month}_detail.html`;
 
@@ -353,7 +404,9 @@ async function handleSchedule(monthParam) {
       .transform(res)
       .text();
 
-    return Response.json({ year, month, games });
+    const data = { year, month, games };
+    await putCachedJson(env, cacheKey, data, getScheduleTtl(year, monthNumber), request);
+    return Response.json(data);
   } catch (err) {
     return Response.json(
       { error: '試合日程の取得に失敗しました', detail: err.message },
@@ -370,17 +423,17 @@ export default {
 
     // /api/standings/:league?year=YYYY
     if (segments[0] === 'api' && segments[1] === 'standings' && segments[2]) {
-      return handleStandings(segments[2], request);
+      return handleStandings(segments[2], request, env);
     }
 
     // /api/stats/:type/:league?year=YYYY
     if (segments[0] === 'api' && segments[1] === 'stats' && segments[2] && segments[3]) {
-      return handleStats(segments[2], segments[3], request);
+      return handleStats(segments[2], segments[3], request, env);
     }
 
     // /api/schedule/YYYY-MM
     if (segments[0] === 'api' && segments[1] === 'schedule' && segments[2]) {
-      return handleSchedule(segments[2]);
+      return handleSchedule(segments[2], request, env);
     }
 
     // その他は dist/ の静的アセット（Workers Static Assets）

@@ -9,6 +9,12 @@
   "assets": {
     "not_found_handling": "single-page-application"
   },
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      "id": "380a38d6849144f28fb6571b7b775c47"
+    }
+  ],
   "observability": {
     "enabled": true
   }
