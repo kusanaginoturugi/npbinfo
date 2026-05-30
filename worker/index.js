@@ -1,5 +1,5 @@
 // Cloudflare Worker エントリポイント
-// - /api/standings/:league    → npb-result APIプロキシ
+// - /api/standings/:league    → npb.jp HTMLRewriter スクレイピング
 // - /api/stats/:type/:league  → npb.jp HTMLRewriter スクレイピング
 // - /api/schedule/:month      → npb.jp 試合日程スクレイピング
 // - /api/weather              → Open-Meteo 天気予報プロキシ
@@ -249,17 +249,14 @@ async function handleStandings(league, request, env) {
   const cached = await getCachedJson(env, cacheKey, request);
   if (cached) return Response.json(cached);
 
-  // 交流戦、オープン戦はとりあえず既存のAPI（過去年度未対応）を叩く
+  // 交流戦・オープン戦は NPB 公式の専用勝敗表を直接読む
   if (league === 'cp' || league === 'op') {
     try {
-      const res = await fetch(
-        `https://npb-result.ant-npb.workers.dev/api/${league}?year=${year}`,
-        { headers: { 'User-Agent': 'npbinfo-app/1.0' } }
-      );
-      if (!res.ok) throw new Error(`upstream ${res.status}`);
-      const upstream = await res.json();
-      const updateNote = await buildStandingsUpdateNote(year, request, env);
-      const teams = Array.isArray(upstream) ? upstream : (upstream?.teams ?? []);
+      const specialStandings = await fetchSpecialStandings(league, year);
+      const updateNote = league === 'cp'
+        ? await fetchInterleagueUpdateNote(year)
+        : null;
+      const teams = specialStandings.teams;
       const data = { league, year, teams };
       if (updateNote) data.updateNote = updateNote;
       await putCachedJson(env, cacheKey, data, getYearAwareTtl(year, 600), request);
@@ -308,6 +305,103 @@ async function handleStandings(league, request, env) {
       { status: 502 }
     );
   }
+}
+
+function normalizeSpecialStandingsTeamName(value) {
+  const normalized = String(value ?? '').replace(/[ \t\r\n　]/g, '');
+  const aliases = Object.keys(TEAM_SHORT_NAMES).sort((a, b) => b.length - a.length);
+  const matched = aliases.find(alias => normalized.includes(alias.replace(/[ \t\r\n　]/g, '')));
+  return matched ? TEAM_SHORT_NAMES[matched] : normalizeTeamShortName(normalized);
+}
+
+function applyCompetitionRanks(teams) {
+  let previousKey = null;
+  let previousRank = 0;
+  teams.forEach((team, index) => {
+    const key = `${team.pct}:${team.gamesBehind}`;
+    const rank = key === previousKey ? previousRank : index + 1;
+    team.rank = rank;
+    previousKey = key;
+    previousRank = rank;
+  });
+}
+
+function buildSpecialStandingsRewriter(teams) {
+  let inRow = false;
+  let cells = [];
+  let cellText = '';
+
+  return new HTMLRewriter()
+    .on('tr.ststats', {
+      element(el) {
+        inRow = true;
+        cells = [];
+        el.onEndTag(() => {
+          inRow = false;
+          if (cells.length < 7) return;
+
+          teams.push({
+            name: normalizeSpecialStandingsTeamName(cells[0]),
+            playGameCount: cells[1] ?? '-',
+            win: cells[2] ?? '-',
+            lose: cells[3] ?? '-',
+            draw: cells[4] ?? '-',
+            pct: cells[5] ?? '-',
+            gamesBehind: cells[6] === '--' ? '-' : (cells[6] ?? '-'),
+            avg: '-',
+            era: '-',
+            hr: '-',
+            sb: '-',
+          });
+        });
+      },
+    })
+    .on('td', {
+      element(el) {
+        if (!inRow) return;
+        cellText = '';
+        el.onEndTag(() => {
+          if (!inRow) return;
+          cells.push(normalizeText(cellText));
+        });
+      },
+      text(chunk) {
+        if (!inRow) return;
+        cellText += chunk.text;
+      },
+    });
+}
+
+async function fetchSpecialStandings(league, year) {
+  const file = league === 'cp' ? 'std_inter.html' : 'std_op.html';
+  const url = `https://npb.jp/bis/${year}/stats/${file}`;
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Accept-Language': 'ja,en;q=0.9',
+    },
+  });
+  if (!res.ok) throw new Error(`npb.jp (${file}) returned ${res.status}`);
+
+  const teams = [];
+  await buildSpecialStandingsRewriter(teams).transform(res).text();
+  applyCompetitionRanks(teams);
+  return { teams };
+}
+
+async function fetchInterleagueUpdateNote(year) {
+  const res = await fetch(`https://npb.jp/interleague/${year}/`, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Accept-Language': 'ja,en;q=0.9',
+    },
+  });
+  if (!res.ok) return null;
+
+  const html = await res.text();
+  const match = html.match(/<p>\s*（\s*(\d{1,2})\/(\d{1,2})\s*終了時\s*）\s*<\/p>/);
+  if (!match) return null;
+  return `${year}/${Number(match[1])}/${Number(match[2])} 試合まで反映`;
 }
 
 function shiftYearMonth(year, month, delta) {

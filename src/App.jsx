@@ -99,7 +99,7 @@ export default function App() {
       </main>
 
       <footer className="app-footer">
-        <p>データ出典: npb.jp（公式）/ npb-result API（非公式）</p>
+        <p>データ出典: npb.jp（公式）</p>
       </footer>
     </div>
   );
