@@ -199,12 +199,12 @@ function buildStandingsRewriter(teams, battingStats, pitchingStats) {
             for (const [idx, field] of Object.entries(STANDINGS_FIELDS)) {
               team[field] = cells[idx] ?? '-';
             }
+            team.name = normalizeTeamShortName(team.name);
             team.rank = teams.length + 1;
 
             // 追加成績をマージ
-            const normalizedName = normalizeTeamShortName(team.name);
-            const bStats = battingStats[normalizedName] || {};
-            const pStats = pitchingStats[normalizedName] || {};
+            const bStats = battingStats[team.name] || {};
+            const pStats = pitchingStats[team.name] || {};
             team.avg = bStats.avg || '-';
             team.hr = bStats.hr || '-';
             team.sb = bStats.sb || '-';
