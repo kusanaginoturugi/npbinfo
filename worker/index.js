@@ -254,7 +254,7 @@ async function handleStandings(league, request, env) {
     try {
       const specialStandings = await fetchSpecialStandings(league, year);
       const updateNote = league === 'cp'
-        ? await fetchInterleagueUpdateNote(year)
+        ? await buildInterleagueUpdateNoteFromStandings(year, specialStandings.teams, request, env)
         : null;
       const teams = specialStandings.teams;
       const data = { league, year, teams };
@@ -389,27 +389,76 @@ async function fetchSpecialStandings(league, year) {
   return { teams };
 }
 
-async function fetchInterleagueUpdateNote(year) {
-  const res = await fetch(`https://npb.jp/interleague/${year}/`, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      'Accept-Language': 'ja,en;q=0.9',
-    },
-  });
-  if (!res.ok) return null;
-
-  const html = await res.text();
-  const match = html.match(/<p>\s*（\s*(\d{1,2})\/(\d{1,2})\s*終了時\s*）\s*<\/p>/);
-  if (!match) return null;
-  return `${year}/${Number(match[1])}/${Number(match[2])} 試合まで反映`;
-}
-
 function shiftYearMonth(year, month, delta) {
   const date = new Date(Date.UTC(year, month - 1 + delta, 1));
   return {
     year: date.getUTCFullYear(),
     month: date.getUTCMonth() + 1,
   };
+}
+
+const CENTRAL_TEAMS = new Set(['阪神', 'ヤクルト', '巨人', 'DeNA', '広島', '中日']);
+const PACIFIC_TEAMS = new Set(['西武', 'オリックス', 'ソフトバンク', '日本ハム', 'ロッテ', '楽天']);
+
+function getLeagueGroup(teamName) {
+  const normalized = normalizeSpecialStandingsTeamName(teamName);
+  if (CENTRAL_TEAMS.has(normalized)) return 'cl';
+  if (PACIFIC_TEAMS.has(normalized)) return 'pl';
+  return null;
+}
+
+function isInterleagueGame(game) {
+  const homeLeague = getLeagueGroup(game.homeTeam);
+  const awayLeague = getLeagueGroup(game.awayTeam);
+  return homeLeague && awayLeague && homeLeague !== awayLeague;
+}
+
+function buildTargetGameCounts(teams) {
+  const counts = new Map();
+  for (const team of teams) {
+    const games = Number(team.playGameCount);
+    if (!team.name || !Number.isFinite(games)) continue;
+    counts.set(team.name, games);
+  }
+  return counts;
+}
+
+function matchesTargetGameCounts(currentCounts, targetCounts) {
+  for (const [team, target] of targetCounts.entries()) {
+    if ((currentCounts.get(team) ?? 0) !== target) return false;
+  }
+  return true;
+}
+
+async function buildInterleagueUpdateNoteFromStandings(year, teams, request, env) {
+  const targetCounts = buildTargetGameCounts(teams);
+  if (targetCounts.size === 0) return null;
+
+  const games = [];
+  for (const month of ['05', '06']) {
+    const scheduleRes = await handleSchedule(`${year}-${month}`, request, env);
+    if (!scheduleRes.ok) continue;
+    const schedule = await scheduleRes.json();
+    games.push(...(schedule.games ?? []).filter(game => (
+      game.status === '終了' && game.date && isInterleagueGame(game)
+    )));
+  }
+
+  const currentCounts = new Map();
+  const dates = [...new Set(games.map(game => game.date))].sort();
+  for (const date of dates) {
+    for (const game of games.filter(item => item.date === date)) {
+      const homeTeam = normalizeSpecialStandingsTeamName(game.homeTeam);
+      const awayTeam = normalizeSpecialStandingsTeamName(game.awayTeam);
+      currentCounts.set(homeTeam, (currentCounts.get(homeTeam) ?? 0) + 1);
+      currentCounts.set(awayTeam, (currentCounts.get(awayTeam) ?? 0) + 1);
+    }
+    if (matchesTargetGameCounts(currentCounts, targetCounts)) {
+      return formatUpdateNoteFromDate(date);
+    }
+  }
+
+  return null;
 }
 
 function formatUpdateNoteFromDate(dateValue) {
