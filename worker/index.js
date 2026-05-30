@@ -84,6 +84,10 @@ function getScheduleTtl(year, month) {
   return 86400;
 }
 
+function getYearAwareTtl(year, currentTtl, pastTtl = 604800) {
+  return year < new Date().getFullYear() ? pastTtl : currentTtl;
+}
+
 function isValidDateValue(dateValue) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return false;
 
@@ -173,7 +177,7 @@ async function handleStandings(league, request, env) {
       );
       if (!res.ok) throw new Error(`upstream ${res.status}`);
       const data = await res.json();
-      await putCachedJson(env, cacheKey, data, 600, request);
+      await putCachedJson(env, cacheKey, data, getYearAwareTtl(year, 600), request);
       return Response.json(data);
     } catch (err) {
       return Response.json({ error: '取得エラー', detail: err.message }, { status: 502 });
@@ -250,7 +254,7 @@ async function handleStandings(league, request, env) {
       .text();
 
     const data = { league, year, teams };
-    await putCachedJson(env, cacheKey, data, 600, request);
+    await putCachedJson(env, cacheKey, data, getYearAwareTtl(year, 600), request);
     return Response.json(data);
   } catch (err) {
     return Response.json(
@@ -394,7 +398,7 @@ async function handleHeadToHead(league, request, env) {
       .text();
 
     const data = { league, year, teams };
-    await putCachedJson(env, cacheKey, data, 1800, request);
+    await putCachedJson(env, cacheKey, data, getYearAwareTtl(year, 1800), request);
     return Response.json(data);
   } catch (err) {
     return Response.json(
@@ -602,7 +606,7 @@ async function handleStats(type, league, request, env) {
     await buildRewriter(players, fields).transform(res).text();
 
     const data = { league, type, year, players };
-    await putCachedJson(env, cacheKey, data, 1800, request);
+    await putCachedJson(env, cacheKey, data, getYearAwareTtl(year, 1800), request);
     return Response.json(data);
   } catch (err) {
     return Response.json(
@@ -895,7 +899,7 @@ async function handleRecent(league, request, env) {
   }
 
   const resultData = { league, year, teams: resultTeams };
-  await putCachedJson(env, cacheKey, resultData, 600, request);
+  await putCachedJson(env, cacheKey, resultData, getYearAwareTtl(year, 600), request);
   return Response.json(resultData);
 }
 
