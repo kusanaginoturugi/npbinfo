@@ -151,6 +151,11 @@ export default function Standings() {
     if (!data[cacheKey]) return [];
     return Array.isArray(data[cacheKey]) ? data[cacheKey] : data[cacheKey].teams ?? [];
   }, [cacheKey, data]);
+  const updateNote = useMemo(() => {
+    const entry = data[cacheKey];
+    if (!entry || Array.isArray(entry)) return '';
+    return entry.updateNote ?? '';
+  }, [cacheKey, data]);
   const graphAvailable = activeLeague === 'cl' || activeLeague === 'pl';
 
   const currentYear = new Date().getFullYear();
@@ -236,6 +241,7 @@ export default function Standings() {
           {lastUpdated[cacheKey] && (
             <div style={{ marginTop: '12px', fontSize: '11px', color: 'var(--color-footer)', textAlign: 'right' }}>
               取得日時: {formatTimestamp(lastUpdated[cacheKey])}
+              {updateNote ? ` (npb.jp 反映: ${updateNote})` : ''}
             </div>
           )}
         </>

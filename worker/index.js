@@ -69,7 +69,8 @@ async function putCachedJson(env, key, data, ttl, request) {
   if (skipCache(request) || !env.CACHE) return;
 
   try {
-    await env.CACHE.put(key, JSON.stringify(data), { expirationTtl: ttl });
+    const options = ttl == null ? {} : { expirationTtl: ttl };
+    await env.CACHE.put(key, JSON.stringify(data), options);
   } catch (err) {
     console.warn(`KV put failed for ${key}: ${err.message}`);
   }
@@ -80,12 +81,20 @@ function getScheduleTtl(year, month) {
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
 
+  if (year < currentYear || (year === currentYear && month < currentMonth)) return null;
   if (year === currentYear && month === currentMonth) return 300;
   return 86400;
 }
 
-function getYearAwareTtl(year, currentTtl, pastTtl = 604800) {
-  return year < new Date().getFullYear() ? pastTtl : currentTtl;
+function getYearAwareTtl(year, currentTtl) {
+  return year < new Date().getFullYear() ? null : currentTtl;
+}
+
+function extractUpdateNoteFromHtml(html) {
+  const match = String(html ?? '').match(/<div[^>]*id=["']stupdate["'][^>]*>([\s\S]*?)<\/div>/i);
+  if (!match) return null;
+  const text = normalizeText(match[1].replace(/<[^>]+>/g, ' '));
+  return text || null;
 }
 
 function isValidDateValue(dateValue) {
@@ -287,10 +296,13 @@ async function handleStandings(league, request, env) {
       parseExtraStats(tmpRes, 'tablefix2', 0, { 1: 'era' }, isLegacy),
     ]);
 
+    const stdHtml = await stdRes.text();
+    const updateNote = extractUpdateNoteFromHtml(stdHtml);
     const teams = [];
-    await buildStandingsRewriter(teams, battingStats, pitchingStats).transform(stdRes).text();
+    await buildStandingsRewriter(teams, battingStats, pitchingStats).transform(new Response(stdHtml)).text();
 
     const data = { league, year, teams };
+    if (updateNote) data.updateNote = updateNote;
     await putCachedJson(env, cacheKey, data, getYearAwareTtl(year, 600), request);
     return Response.json(data);
   } catch (err) {
@@ -809,10 +821,13 @@ async function handleStats(type, league, request, env) {
       throw new Error(`npb.jp returned ${res.status} for URL: ${url}`);
     }
 
+    const html = await res.text();
+    const updateNote = extractUpdateNoteFromHtml(html);
     const players = [];
-    await buildRewriter(players, fields, isLegacy).transform(res).text();
+    await buildRewriter(players, fields, isLegacy).transform(new Response(html)).text();
 
     const data = { league, type, year, players };
+    if (updateNote) data.updateNote = updateNote;
     await putCachedJson(env, cacheKey, data, getYearAwareTtl(year, 1800), request);
     return Response.json(data);
   } catch (err) {
@@ -1001,7 +1016,7 @@ async function handleWeather(request, env) {
       precipitationProb: dailyData.precipitation_probability_max?.[0] ?? null,
     };
 
-    await putCachedJson(env, cacheKey, data, 1800, request);
+    await putCachedJson(env, cacheKey, data, isPast ? null : 1800, request);
     return Response.json(data);
   } catch (err) {
     return Response.json(

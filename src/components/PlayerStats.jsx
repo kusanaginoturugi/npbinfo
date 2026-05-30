@@ -145,10 +145,10 @@ export default function PlayerStats() {
           return;
         }
         const now = Date.now();
-        const players = json.players ?? [];
-        setCache(prev => ({ ...prev, [cacheKey]: players }));
+        const payload = { ...json, players: json.players ?? [] };
+        setCache(prev => ({ ...prev, [cacheKey]: payload }));
         setLastUpdated(prev => ({ ...prev, [cacheKey]: now }));
-        apiCache.set(cacheKey, players, year);
+        apiCache.set(cacheKey, payload, year);
       })
       .catch(e => {
         setError(e.message);
@@ -177,7 +177,8 @@ export default function PlayerStats() {
   };
 
   const sortedPlayers = useMemo(() => {
-    let raw = cache[cacheKey] || [];
+    const entry = cache[cacheKey];
+    let raw = Array.isArray(entry) ? entry : (entry?.players ?? []);
 
     const trimmedName = playerNameFilter.trim();
     if (trimmedName) {
@@ -221,6 +222,11 @@ export default function PlayerStats() {
         : bVal.localeCompare(aVal, 'ja');
     });
   }, [cache, cacheKey, sortConfig, isFavorite, showFavoritesOnly, playerNameFilter, selectedTeams]);
+  const updateNote = useMemo(() => {
+    const entry = cache[cacheKey];
+    if (!entry || Array.isArray(entry)) return '';
+    return entry.updateNote ?? '';
+  }, [cache, cacheKey]);
 
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 12 }, (_, i) => currentYear - i);
@@ -328,6 +334,7 @@ export default function PlayerStats() {
           {lastUpdated[cacheKey] && (
             <div style={{ marginTop: '12px', fontSize: '11px', color: 'var(--color-footer)', textAlign: 'right' }}>
               取得日時: {formatTimestamp(lastUpdated[cacheKey])}
+              {updateNote ? ` (npb.jp 反映: ${updateNote})` : ''}
             </div>
           )}
         </>
