@@ -1463,11 +1463,11 @@ async function handleRecent(league, request, env) {
     }
   }
 
-  // 各チームの最後の5試合を「新しい順（逆順）」で抽出
+  // 各チームの最後の5試合を「古い順（時系列順）」で抽出
   const resultTeams = {};
   for (const team of targetTeams) {
     const games = teamsRecent[team];
-    resultTeams[team] = games.slice(-5).reverse();
+    resultTeams[team] = games.slice(-5);
   }
 
   const resultData = { league, year, teams: resultTeams };
