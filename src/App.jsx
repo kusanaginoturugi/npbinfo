@@ -3,7 +3,10 @@ import Standings from './components/Standings';
 import PlayerStats from './components/PlayerStats';
 import Schedule from './components/Schedule';
 import Stadiums from './components/Stadiums';
+import { syncDebugFromUrl } from './utils/debug';
 import './App.css';
+
+syncDebugFromUrl();
 
 const TABS = [
   { key: 'standings', label: '順位表' },

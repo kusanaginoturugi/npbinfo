@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiCache } from '../utils/apiCache';
+import { isDebugMode } from '../utils/debug';
 import { getContrastColor, getTeamInfo, getTeamLeague, normalizeTeamName } from '../data/teams';
 import { STADIUMS } from '../data/stadiums';
 import { formatTemperature, getWeatherIcon } from '../utils/weatherIcon';
@@ -232,15 +233,27 @@ export default function Schedule() {
   const [weatherCache, setWeatherCache] = useState({});
   const [headToHeadCache, setHeadToHeadCache] = useState({});
   const [recentCache, setRecentCache] = useState({});
+  const debugMode = isDebugMode();
 
   const cacheKey = `schedule:${month}`;
   const schedule = cache[cacheKey];
   const games = schedule?.games ?? [];
 
+  const withNoCache = (url) => (debugMode ? `${url}${url.includes('?') ? '&' : '?'}nocache=1` : url);
+
+  const handleRefresh = () => {
+    apiCache.remove(cacheKey);
+    setCache({});
+    setRecentCache({});
+    setHeadToHeadCache({});
+    setWeatherCache({});
+    setLastUpdated({});
+  };
+
   useEffect(() => {
     if (cache[cacheKey]) return;
 
-    const cached = apiCache.get(cacheKey);
+    const cached = debugMode ? null : apiCache.get(cacheKey);
     if (cached) {
       setCache(prev => ({ ...prev, [cacheKey]: cached.data }));
       setLastUpdated(prev => ({ ...prev, [cacheKey]: cached.timestamp }));
@@ -250,7 +263,7 @@ export default function Schedule() {
     setLoading(true);
     setError(null);
     setErrorDetail(null);
-    fetch(`/api/schedule/${month}`)
+    fetch(withNoCache(`/api/schedule/${month}`))
       .then(r => r.json())
       .then(json => {
         if (json.error) {
@@ -261,11 +274,13 @@ export default function Schedule() {
         const now = Date.now();
         setCache(prev => ({ ...prev, [cacheKey]: json }));
         setLastUpdated(prev => ({ ...prev, [cacheKey]: now }));
-        apiCache.set(cacheKey, json, Number(month.slice(0, 4)), getScheduleTtl(month));
+        if (!debugMode) {
+          apiCache.set(cacheKey, json, Number(month.slice(0, 4)), getScheduleTtl(month));
+        }
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [cache, cacheKey, month]);
+  }, [cache, cacheKey, month, debugMode]);
 
   const availableDates = useMemo(() => {
     return [...new Set(games.map(game => game.date))].sort();
@@ -318,7 +333,7 @@ export default function Schedule() {
 
     let cancelled = false;
     Promise.all(missing.map(league => (
-      fetch(`/api/headtohead/${league}?year=${year}`)
+      fetch(withNoCache(`/api/headtohead/${league}?year=${year}`))
         .then(r => r.json())
         .then(json => ({ league, json }))
         .catch(() => ({ league, json: null }))
@@ -352,7 +367,7 @@ export default function Schedule() {
 
     let cancelled = false;
     Promise.all(missing.map(league => (
-      fetch(`/api/recent/${league}?year=${year}`)
+      fetch(withNoCache(`/api/recent/${league}?year=${year}`))
         .then(r => r.json())
         .then(json => ({ league, json }))
         .catch(() => ({ league, json: null }))
@@ -390,7 +405,7 @@ export default function Schedule() {
 
     let cancelled = false;
     Promise.all(missing.map(target => (
-      fetch(`/api/weather?lat=${target.stadium.lat}&lng=${target.stadium.lng}&date=${target.date}`)
+      fetch(withNoCache(`/api/weather?lat=${target.stadium.lat}&lng=${target.stadium.lng}&date=${target.date}`))
         .then(r => r.json())
         .then(json => ({
           key: target.key,
@@ -440,6 +455,17 @@ export default function Schedule() {
             <option key={date} value={date}>{formatDateLabel(date)}</option>
           ))}
         </select>
+        {debugMode && (
+          <button
+            type="button"
+            className="year-select"
+            onClick={handleRefresh}
+            disabled={loading}
+            title="キャッシュを無視して再取得 (debug)"
+          >
+            ↻ 更新
+          </button>
+        )}
       </div>
 
       {loading && <div className="status-msg">読み込み中...</div>}

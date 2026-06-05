@@ -40,6 +40,14 @@ export const apiCache = {
     }
   },
 
+  remove(key) {
+    try {
+      localStorage.removeItem(CACHE_PREFIX + key);
+    } catch {
+      // ignore
+    }
+  },
+
   // 古いキャッシュを掃除する（念のため）
   clearExpired() {
     try {
