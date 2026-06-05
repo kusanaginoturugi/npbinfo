@@ -680,6 +680,17 @@ body {
   color: var(--color-text);
   background: var(--bg-row-odd);
   font-weight: 600;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+button.schedule-weather {
+  cursor: pointer;
+}
+
+button.schedule-weather:hover {
+  border-color: var(--border-tab-active);
+  background: var(--bg-row-hover);
 }
 
 .schedule-weather-label {
@@ -708,6 +719,21 @@ body {
 [data-theme="dark"] .schedule-headtohead {
   background: #2d2112;
   color: #f0b35a;
+}
+
+.schedule-stadium-link {
+  border: 0;
+  background: transparent;
+  color: var(--color-footer);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.schedule-stadium-link:hover {
+  color: var(--color-tab-active);
+  text-decoration: underline;
 }
 
 .schedule-status {

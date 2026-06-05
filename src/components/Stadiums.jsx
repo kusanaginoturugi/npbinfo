@@ -186,8 +186,8 @@ function StadiumDetail({ stadium }) {
   );
 }
 
-export default function Stadiums() {
-  const [selectedId, setSelectedId] = useState(STADIUMS[0].id);
+export default function Stadiums({ selectedStadiumId }) {
+  const [selectedId, setSelectedId] = useState(selectedStadiumId ?? STADIUMS[0].id);
   const mapElementRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef(new Map());
@@ -196,6 +196,12 @@ export default function Stadiums() {
     () => STADIUMS.find(stadium => stadium.id === selectedId) ?? STADIUMS[0],
     [selectedId],
   );
+
+  useEffect(() => {
+    if (selectedStadiumId && STADIUMS.some(stadium => stadium.id === selectedStadiumId)) {
+      setSelectedId(selectedStadiumId);
+    }
+  }, [selectedStadiumId]);
 
   useEffect(() => {
     if (!mapElementRef.current || mapRef.current) return;

@@ -162,23 +162,34 @@ function ScoreBlock({ game }) {
   );
 }
 
-function ScheduleWeather({ weatherState }) {
+function ScheduleWeather({ weatherState, stadium, onSelectStadium }) {
+  const openStadium = () => {
+    if (stadium) onSelectStadium?.(stadium.id);
+  };
+  const commonProps = stadium
+    ? { type: 'button', onClick: openStadium }
+    : {};
+  const Tag = stadium ? 'button' : 'span';
+
   if (!weatherState) return null;
   if (weatherState.loading) {
     return (
-      <span className="schedule-weather" title="球場の天気予報を取得中">
+      <Tag className="schedule-weather" title="球場の天気予報を取得中。球場情報を開く" {...commonProps}>
         <span className="schedule-weather-label">天気</span>
-        <span className="schedule-weather-main">取得中</span>
-      </span>
+        <span className="schedule-weather-main" aria-label="取得中">
+          <span aria-hidden="true">☁️</span>
+        </span>
+      </Tag>
     );
   }
   if (!weatherState.data) return null;
 
   const weather = getWeatherIcon(weatherState.data.weatherCode);
   return (
-    <span
+    <Tag
       className="schedule-weather"
-      title={`${weather.label} / 最高 ${formatTemperature(weatherState.data.tempMax)} / 最低 ${formatTemperature(weatherState.data.tempMin)} / ${formatPrecipitation(weatherState.data.precipitationProb)}`}
+      title={`${weather.label} / 最高 ${formatTemperature(weatherState.data.tempMax)} / 最低 ${formatTemperature(weatherState.data.tempMin)} / ${formatPrecipitation(weatherState.data.precipitationProb)}。球場情報を開く`}
+      {...commonProps}
     >
       <span className="schedule-weather-label">天気</span>
       <span className="schedule-weather-main">
@@ -191,7 +202,7 @@ function ScheduleWeather({ weatherState }) {
       {weatherState.data.precipitationProb !== null && weatherState.data.precipitationProb !== undefined && (
         <span>{formatPrecipitation(weatherState.data.precipitationProb)}</span>
       )}
-    </span>
+    </Tag>
   );
 }
 
@@ -205,7 +216,22 @@ function StatusBadge({ status }) {
   return <span className={`schedule-status status-${status}`}>{status}</span>;
 }
 
-function ScheduleCard({ game, weatherState, headToHeadRecord, homeRecent, awayRecent }) {
+function StadiumMeta({ game, stadium, onSelectStadium }) {
+  if (!stadium) return <span>{game.stadium || '-'}</span>;
+
+  return (
+    <button
+      type="button"
+      className="schedule-stadium-link"
+      onClick={() => onSelectStadium?.(stadium.id)}
+      title={`${stadium.name}の球場情報を開く`}
+    >
+      {game.stadium || stadium.name}
+    </button>
+  );
+}
+
+function ScheduleCard({ game, weatherState, headToHeadRecord, homeRecent, awayRecent, stadium, onSelectStadium }) {
   return (
     <article className="schedule-card">
       <div className="schedule-match">
@@ -230,9 +256,9 @@ function ScheduleCard({ game, weatherState, headToHeadRecord, homeRecent, awayRe
 
       <div className="schedule-meta">
         <StatusBadge status={game.status} />
-        <span>{game.stadium || '-'}</span>
+        <StadiumMeta game={game} stadium={stadium} onSelectStadium={onSelectStadium} />
         <HeadToHeadBadge record={headToHeadRecord} />
-        <ScheduleWeather weatherState={weatherState} />
+        <ScheduleWeather weatherState={weatherState} stadium={stadium} onSelectStadium={onSelectStadium} />
         {game.scoreUrl && (
           <a href={game.scoreUrl} target="_blank" rel="noreferrer">
             NPB
@@ -244,7 +270,7 @@ function ScheduleCard({ game, weatherState, headToHeadRecord, homeRecent, awayRe
   );
 }
 
-export default function Schedule() {
+export default function Schedule({ onSelectStadium }) {
   const [month, setMonth] = useState(CURRENT_MONTH);
   const [selectedDate, setSelectedDate] = useState(formatDateValue(CURRENT_DATE));
   const [cache, setCache] = useState({});
@@ -504,16 +530,21 @@ export default function Schedule() {
         <>
           {selectedGames.length > 0 ? (
             <div className="schedule-list">
-              {selectedGames.map((game, index) => (
-                <ScheduleCard
-                  key={`${game.date}-${index}`}
-                  game={game}
-                  weatherState={weatherCache[getWeatherCacheKey(findStadiumByGameName(game.stadium), game.date)]}
-                  headToHeadRecord={getHeadToHeadRecord(game, headToHeadCache, Number(month.slice(0, 4)))}
-                  homeRecent={getRecentGames(game.homeTeam, recentCache, Number(month.slice(0, 4)))}
-                  awayRecent={getRecentGames(game.awayTeam, recentCache, Number(month.slice(0, 4)))}
-                />
-              ))}
+              {selectedGames.map((game, index) => {
+                const stadium = findStadiumByGameName(game.stadium);
+                return (
+                  <ScheduleCard
+                    key={`${game.date}-${index}`}
+                    game={game}
+                    stadium={stadium}
+                    onSelectStadium={onSelectStadium}
+                    weatherState={weatherCache[getWeatherCacheKey(stadium, game.date)]}
+                    headToHeadRecord={getHeadToHeadRecord(game, headToHeadCache, Number(month.slice(0, 4)))}
+                    homeRecent={getRecentGames(game.homeTeam, recentCache, Number(month.slice(0, 4)))}
+                    awayRecent={getRecentGames(game.awayTeam, recentCache, Number(month.slice(0, 4)))}
+                  />
+                );
+              })}
             </div>
           ) : (
             <div className="status-msg">この日の試合はありません</div>

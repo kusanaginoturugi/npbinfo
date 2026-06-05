@@ -73,9 +73,15 @@ function useTheme() {
 
 export default function App() {
   const [tab, setTab] = useState('standings');
+  const [selectedStadiumId, setSelectedStadiumId] = useState(null);
   const [dark, setDark] = useTheme();
   const [showOptions, setShowOptions] = useState(false);
   const optionsRef = useRef(null);
+
+  const openStadium = (stadiumId) => {
+    setSelectedStadiumId(stadiumId);
+    setTab('stadiums');
+  };
 
   useEffect(() => {
     function onClickOutside(e) {
@@ -138,8 +144,8 @@ export default function App() {
       <main className="app-main">
         {tab === 'standings' && <Standings />}
         {tab === 'players' && <PlayerStats />}
-        {tab === 'schedule' && <Schedule />}
-        {tab === 'stadiums' && <Stadiums />}
+        {tab === 'schedule' && <Schedule onSelectStadium={openStadium} />}
+        {tab === 'stadiums' && <Stadiums selectedStadiumId={selectedStadiumId} />}
       </main>
 
       <footer className="app-footer">
