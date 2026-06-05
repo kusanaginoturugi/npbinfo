@@ -6,6 +6,7 @@
 // - /api/headtohead/:league   → チーム間対戦成績スクレイピング
 // - /og/standings/:league     → 順位表 OGP SVG
 // - その他                    → dist/ の静的アセットを返す
+
 const BUILD_INFO = {
   buildId: __NPBINFO_BUILD_ID__,
   buildTime: __NPBINFO_BUILD_TIME__,
@@ -1026,6 +1027,326 @@ async function handleStandingsOg(league, request, env) {
   }
 }
 
+const PNG_WIDTH = 1200;
+const PNG_HEIGHT = 630;
+
+const OGP_LEAGUE_LABELS = {
+  cl: 'CENTRAL',
+  pl: 'PACIFIC',
+  cp: 'INTERLEAGUE',
+  op: 'OPEN',
+};
+
+const OGP_TEAM_CODES = {
+  'ヤクルト': 'YS',
+  '阪神': 'T',
+  '巨人': 'G',
+  '読売': 'G',
+  'DeNA': 'DB',
+  '横浜DeNA': 'DB',
+  '広島': 'C',
+  '中日': 'D',
+  '西武': 'L',
+  'ソフトバンク': 'H',
+  'オリックス': 'B',
+  '日本ハム': 'F',
+  'ロッテ': 'M',
+  '楽天': 'E',
+};
+
+const BITMAP_FONT = {
+  ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000'],
+  '-': ['00000', '00000', '00000', '11110', '00000', '00000', '00000'],
+  '.': ['00000', '00000', '00000', '00000', '00000', '01100', '01100'],
+  '/': ['00001', '00010', '00010', '00100', '01000', '01000', '10000'],
+  ':': ['00000', '01100', '01100', '00000', '01100', '01100', '00000'],
+  '0': ['01110', '10001', '10011', '10101', '11001', '10001', '01110'],
+  '1': ['00100', '01100', '00100', '00100', '00100', '00100', '01110'],
+  '2': ['01110', '10001', '00001', '00010', '00100', '01000', '11111'],
+  '3': ['11110', '00001', '00001', '01110', '00001', '00001', '11110'],
+  '4': ['00010', '00110', '01010', '10010', '11111', '00010', '00010'],
+  '5': ['11111', '10000', '11110', '00001', '00001', '10001', '01110'],
+  '6': ['00110', '01000', '10000', '11110', '10001', '10001', '01110'],
+  '7': ['11111', '00001', '00010', '00100', '01000', '01000', '01000'],
+  '8': ['01110', '10001', '10001', '01110', '10001', '10001', '01110'],
+  '9': ['01110', '10001', '10001', '01111', '00001', '00010', '11100'],
+  A: ['01110', '10001', '10001', '11111', '10001', '10001', '10001'],
+  B: ['11110', '10001', '10001', '11110', '10001', '10001', '11110'],
+  C: ['01110', '10001', '10000', '10000', '10000', '10001', '01110'],
+  D: ['11110', '10001', '10001', '10001', '10001', '10001', '11110'],
+  E: ['11111', '10000', '10000', '11110', '10000', '10000', '11111'],
+  F: ['11111', '10000', '10000', '11110', '10000', '10000', '10000'],
+  G: ['01110', '10001', '10000', '10111', '10001', '10001', '01110'],
+  H: ['10001', '10001', '10001', '11111', '10001', '10001', '10001'],
+  I: ['01110', '00100', '00100', '00100', '00100', '00100', '01110'],
+  J: ['00111', '00010', '00010', '00010', '00010', '10010', '01100'],
+  K: ['10001', '10010', '10100', '11000', '10100', '10010', '10001'],
+  L: ['10000', '10000', '10000', '10000', '10000', '10000', '11111'],
+  M: ['10001', '11011', '10101', '10101', '10001', '10001', '10001'],
+  N: ['10001', '11001', '10101', '10011', '10001', '10001', '10001'],
+  O: ['01110', '10001', '10001', '10001', '10001', '10001', '01110'],
+  P: ['11110', '10001', '10001', '11110', '10000', '10000', '10000'],
+  Q: ['01110', '10001', '10001', '10001', '10101', '10010', '01101'],
+  R: ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
+  S: ['01111', '10000', '10000', '01110', '00001', '00001', '11110'],
+  T: ['11111', '00100', '00100', '00100', '00100', '00100', '00100'],
+  U: ['10001', '10001', '10001', '10001', '10001', '10001', '01110'],
+  V: ['10001', '10001', '10001', '10001', '10001', '01010', '00100'],
+  W: ['10001', '10001', '10001', '10101', '10101', '10101', '01010'],
+  X: ['10001', '10001', '01010', '00100', '01010', '10001', '10001'],
+  Y: ['10001', '10001', '01010', '00100', '00100', '00100', '00100'],
+  Z: ['11111', '00001', '00010', '00100', '01000', '10000', '11111'],
+};
+
+let crcTable;
+
+function getCrcTable() {
+  if (crcTable) return crcTable;
+  crcTable = new Uint32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+    crcTable[n] = c >>> 0;
+  }
+  return crcTable;
+}
+
+function crc32(bytes) {
+  const table = getCrcTable();
+  let c = 0xffffffff;
+  for (const byte of bytes) c = table[(c ^ byte) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function adler32(bytes) {
+  let a = 1;
+  let b = 0;
+  for (const byte of bytes) {
+    a = (a + byte) % 65521;
+    b = (b + a) % 65521;
+  }
+  return ((b << 16) | a) >>> 0;
+}
+
+function writeUint32(bytes, offset, value) {
+  bytes[offset] = (value >>> 24) & 0xff;
+  bytes[offset + 1] = (value >>> 16) & 0xff;
+  bytes[offset + 2] = (value >>> 8) & 0xff;
+  bytes[offset + 3] = value & 0xff;
+}
+
+function pngChunk(type, data = new Uint8Array()) {
+  const typeBytes = new TextEncoder().encode(type);
+  const chunk = new Uint8Array(12 + data.length);
+  writeUint32(chunk, 0, data.length);
+  chunk.set(typeBytes, 4);
+  chunk.set(data, 8);
+  writeUint32(chunk, 8 + data.length, crc32(chunk.subarray(4, 8 + data.length)));
+  return chunk;
+}
+
+function zlibStore(data) {
+  const blockCount = Math.ceil(data.length / 65535);
+  const out = new Uint8Array(2 + data.length + blockCount * 5 + 4);
+  let offset = 0;
+  out[offset++] = 0x78;
+  out[offset++] = 0x01;
+  for (let pos = 0; pos < data.length; pos += 65535) {
+    const length = Math.min(65535, data.length - pos);
+    const final = pos + length >= data.length;
+    out[offset++] = final ? 1 : 0;
+    out[offset++] = length & 0xff;
+    out[offset++] = (length >>> 8) & 0xff;
+    const nlen = (~length) & 0xffff;
+    out[offset++] = nlen & 0xff;
+    out[offset++] = (nlen >>> 8) & 0xff;
+    out.set(data.subarray(pos, pos + length), offset);
+    offset += length;
+  }
+  writeUint32(out, offset, adler32(data));
+  return out;
+}
+
+function concatBytes(parts) {
+  const total = parts.reduce((sum, part) => sum + part.length, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const part of parts) {
+    out.set(part, offset);
+    offset += part.length;
+  }
+  return out;
+}
+
+function parseHexColor(hex) {
+  const value = String(hex).replace('#', '');
+  return [
+    parseInt(value.slice(0, 2), 16),
+    parseInt(value.slice(2, 4), 16),
+    parseInt(value.slice(4, 6), 16),
+    255,
+  ];
+}
+
+function createPngCanvas(width, height, background) {
+  const pixels = new Uint8Array(width * height * 4);
+  const color = parseHexColor(background);
+  for (let i = 0; i < pixels.length; i += 4) pixels.set(color, i);
+  return { width, height, pixels };
+}
+
+function setPixel(canvas, x, y, color) {
+  if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return;
+  canvas.pixels.set(color, (y * canvas.width + x) * 4);
+}
+
+function fillRect(canvas, x, y, width, height, hex) {
+  const color = parseHexColor(hex);
+  for (let yy = Math.max(0, y); yy < Math.min(canvas.height, y + height); yy += 1) {
+    for (let xx = Math.max(0, x); xx < Math.min(canvas.width, x + width); xx += 1) {
+      setPixel(canvas, xx, yy, color);
+    }
+  }
+}
+
+function fillCircle(canvas, cx, cy, radius, hex) {
+  const color = parseHexColor(hex);
+  const r2 = radius * radius;
+  for (let y = cy - radius; y <= cy + radius; y += 1) {
+    for (let x = cx - radius; x <= cx + radius; x += 1) {
+      const dx = x - cx;
+      const dy = y - cy;
+      if (dx * dx + dy * dy <= r2) setPixel(canvas, x, y, color);
+    }
+  }
+}
+
+function textWidth(text, scale) {
+  return String(text).length * 6 * scale;
+}
+
+function drawText(canvas, text, x, y, scale, hex) {
+  const color = parseHexColor(hex);
+  const chars = String(text).toUpperCase();
+  let cursor = x;
+  for (const char of chars) {
+    const glyph = BITMAP_FONT[char] ?? BITMAP_FONT[' '];
+    glyph.forEach((row, rowIndex) => {
+      for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
+        if (row[colIndex] !== '1') continue;
+        for (let yy = 0; yy < scale; yy += 1) {
+          for (let xx = 0; xx < scale; xx += 1) {
+            setPixel(canvas, cursor + colIndex * scale + xx, y + rowIndex * scale + yy, color);
+          }
+        }
+      }
+    });
+    cursor += 6 * scale;
+  }
+}
+
+function makePng(canvas) {
+  const raw = new Uint8Array((canvas.width * 4 + 1) * canvas.height);
+  let offset = 0;
+  for (let y = 0; y < canvas.height; y += 1) {
+    raw[offset++] = 0;
+    raw.set(canvas.pixels.subarray(y * canvas.width * 4, (y + 1) * canvas.width * 4), offset);
+    offset += canvas.width * 4;
+  }
+  const ihdr = new Uint8Array(13);
+  writeUint32(ihdr, 0, canvas.width);
+  writeUint32(ihdr, 4, canvas.height);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  const signature = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+  return concatBytes([
+    signature,
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', zlibStore(raw)),
+    pngChunk('IEND'),
+  ]);
+}
+
+function getOgpTeamCode(name) {
+  const teamName = String(name ?? '');
+  return Object.entries(OGP_TEAM_CODES).find(([key]) => teamName.includes(key))?.[1] ?? teamName.slice(0, 3).toUpperCase();
+}
+
+function renderStandingsPng(data, league) {
+  const canvas = createPngCanvas(PNG_WIDTH, PNG_HEIGHT, '#f4f6f9');
+  fillRect(canvas, 0, 0, PNG_WIDTH, 120, '#0a1628');
+  fillRect(canvas, 0, 120, PNG_WIDTH, 510, '#e8eef8');
+
+  const label = OGP_LEAGUE_LABELS[league] ?? 'NPB';
+  const year = String(data.year ?? getCurrentYear());
+  drawText(canvas, `NPBINFO ${label}`, 86, 42, 6, '#ffffff');
+  drawText(canvas, `${year} STANDINGS`, 820, 52, 4, '#c7d2fe');
+  drawText(canvas, 'RANK', 86, 138, 3, '#475569');
+  drawText(canvas, 'TEAM', 214, 138, 3, '#475569');
+  drawText(canvas, 'WIN', 760, 138, 3, '#475569');
+  drawText(canvas, 'LOSE', 870, 138, 3, '#475569');
+  drawText(canvas, 'GB', 1000, 138, 3, '#475569');
+
+  const teams = (data.teams ?? []).slice(0, 12);
+  if (!teams.length) {
+    drawText(canvas, 'NO STANDINGS DATA', 360, 306, 5, '#64748b');
+  } else {
+    const compact = teams.length > 6;
+    const startY = compact ? 164 : 178;
+    const rowStep = compact ? 34 : 58;
+    const rowHeight = compact ? 28 : 46;
+    const textScale = compact ? 3 : 4;
+    teams.forEach((team, index) => {
+      const y = startY + index * rowStep;
+      fillRect(canvas, 86, y - 24, 1028, rowHeight, index % 2 === 0 ? '#ffffff' : '#f8fafc');
+      fillCircle(canvas, 118, y - 10, compact ? 10 : 14, getTeamColor(team.name));
+      drawText(canvas, String(team.rank ?? index + 1), 150, y - 20, textScale, '#0f172a');
+      drawText(canvas, getOgpTeamCode(team.name), 214, y - 20, textScale, '#0f172a');
+      drawText(canvas, String(team.win ?? '-'), 760, y - 20, textScale, '#334155');
+      drawText(canvas, String(team.lose ?? '-'), 870, y - 20, textScale, '#334155');
+      drawText(canvas, String(team.gamesBehind ?? '-'), 980, y - 20, textScale, '#334155');
+    });
+  }
+
+  drawText(canvas, 'NPB', 86, 560, 5, '#e8392a');
+  drawText(canvas, 'NPBINFO.KUSANAGINOTURUGI.WORKERS.DEV', 190, 570, 3, '#334155');
+  return makePng(canvas);
+}
+
+function renderErrorPng(message) {
+  const canvas = createPngCanvas(PNG_WIDTH, PNG_HEIGHT, '#b91c1c');
+  drawText(canvas, 'DATA FETCH ERROR', 300, 260, 6, '#ffffff');
+  drawText(canvas, String(message ?? 'UNKNOWN ERROR').slice(0, 32), 240, 340, 4, '#fee2e2');
+  return makePng(canvas);
+}
+
+async function handleStandingsOgPng(league, request, env) {
+  if (!VALID_LEAGUES.has(league)) {
+    return new Response('Not Found', { status: 404 });
+  }
+
+  const headers = {
+    'Content-Type': 'image/png',
+    'Cache-Control': 'public, max-age=300',
+  };
+
+  if (request.method === 'HEAD') {
+    return new Response(null, { headers });
+  }
+
+  try {
+    const res = await handleStandings(league, request, env);
+    if (!res.ok) throw new Error(`standings ${res.status}`);
+
+    const data = await res.json();
+    return new Response(renderStandingsPng(data, league), { headers });
+  } catch (err) {
+    return new Response(renderErrorPng(err.message), { headers });
+  }
+}
+
 // ─── 選手成績 ─────────────────────────────────────────────────
 // 2026年度以降のテーブル構造に対応
 const BATTING_FIELDS = {
@@ -1530,6 +1851,11 @@ export default {
     // /api/weather?lat=..&lng=..&date=YYYY-MM-DD
     if (segments[0] === 'api' && segments[1] === 'weather') {
       return handleWeather(request, env);
+    }
+
+    // /og/standings/:league.png
+    if (segments[0] === 'og' && segments[1] === 'standings' && segments[2]?.endsWith('.png')) {
+      return handleStandingsOgPng(segments[2].replace(/\.png$/, ''), request, env);
     }
 
     // /og/standings/:league
