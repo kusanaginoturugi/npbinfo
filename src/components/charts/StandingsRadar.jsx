@@ -1,11 +1,11 @@
 import { getTeamInfo } from '../../data/teams';
 
 const METRICS = [
-  { key: 'pct', label: '勝率', scale: (team) => team.pct * 100 },
-  { key: 'avg', label: '打率', scale: (team) => team.avg * 100 },
-  { key: 'hr', label: '本塁打', scale: (team, context) => (team.hr / (context.maxHr || 1)) * 100 },
-  { key: 'sb', label: '盗塁', scale: (team, context) => (team.sb / (context.maxSb || 1)) * 100 },
-  { key: 'era', label: '防御率(反転)', scale: (team, context) => ((context.maxEra - team.era) / context.eraRange) * 100 },
+  { key: 'pct', label: '勝率', getValue: (team) => team.pct },
+  { key: 'avg', label: '打率', getValue: (team) => team.avg },
+  { key: 'hr', label: '本塁打', getValue: (team) => team.hr },
+  { key: 'sb', label: '盗塁', getValue: (team) => team.sb },
+  { key: 'era', label: '防御率(反転)', getValue: (team) => team.era, lowerBetter: true },
 ];
 
 function parseNumber(value) {
@@ -30,6 +30,25 @@ function pointsToPath(points) {
   return points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
 }
 
+function buildMetricRanges(values) {
+  return Object.fromEntries(METRICS.map((metric) => {
+    const metricValues = values.map(metric.getValue);
+    return [metric.key, {
+      min: Math.min(...metricValues),
+      max: Math.max(...metricValues),
+    }];
+  }));
+}
+
+function scaleRelative(value, range, lowerBetter = false) {
+  const distance = range.max - range.min;
+  if (!Number.isFinite(value) || !Number.isFinite(distance) || distance === 0) return 100;
+  const score = lowerBetter
+    ? ((range.max - value) / distance) * 100
+    : ((value - range.min) / distance) * 100;
+  return clampPercent(score);
+}
+
 function buildSeries(teams) {
   const values = teams
     .map((team) => ({
@@ -44,16 +63,7 @@ function buildSeries(teams) {
 
   if (!values.length) return [];
 
-  const maxHr = Math.max(...values.map(item => item.hr));
-  const maxSb = Math.max(...values.map(item => item.sb));
-  const maxEra = Math.max(...values.map(item => item.era));
-  const minEra = Math.min(...values.map(item => item.era));
-  const context = {
-    maxHr,
-    maxSb,
-    maxEra,
-    eraRange: maxEra - minEra || 1,
-  };
+  const ranges = buildMetricRanges(values);
 
   return values.map((team) => {
     const info = getTeamInfo(team.name);
@@ -61,7 +71,9 @@ function buildSeries(teams) {
       key: team.name,
       color: info?.colors?.[0] ?? '#64748b',
       code: info?.code ?? team.name,
-      scores: METRICS.map((metric) => clampPercent(metric.scale(team, context))),
+      scores: METRICS.map((metric) => (
+        scaleRelative(metric.getValue(team), ranges[metric.key], metric.lowerBetter)
+      )),
     };
   });
 }
@@ -138,7 +150,7 @@ export default function StandingsRadar({ teams }) {
           </span>
         ))}
       </div>
-      <p className="chart-note">防御率は「低いほど良い」ため反転スケールで表示。</p>
+      <p className="chart-note">各指標はリーグ内の最小値を0、最大値を100にした相対スケールで表示。防御率は低いほど良いため反転。</p>
     </div>
   );
 }
