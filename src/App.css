@@ -1101,7 +1101,7 @@ body {
 
 .schedule-recent-badges {
   display: flex;
-  gap: 3px;
+  gap: 2px;
 }
 
 .recent-badge {
@@ -1109,32 +1109,37 @@ body {
   align-items: center;
   justify-content: center;
   width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  font-size: 8px;
-  font-weight: 800;
+  height: 16px;
+  font-size: 18px;
+  font-weight: 700;
   line-height: 1;
-  border: 1px solid #000;
+  border: 0;
+  background: transparent;
+  color: #111827;
 }
 
 .recent-badge.win {
-  background: #000;
-  color: #fff;
+  color: #111827;
 }
 
 .recent-badge.lose {
-  background: #fff;
-  color: #000;
+  color: #111827;
 }
 
 .recent-badge.draw {
-  background: transparent;
-  color: #000;
+  color: #111827;
 }
 
-[data-theme="dark"] .recent-badge.lose,
-[data-theme="dark"] .recent-badge.draw {
+[data-theme="dark"] .recent-badge {
   background: transparent;
-  color: #fff;
-  border-color: #fff;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .recent-badge.lose {
+  color: #020617;
+  text-shadow:
+    -1px -1px 0 #f8fafc,
+    1px -1px 0 #f8fafc,
+    -1px 1px 0 #f8fafc,
+    1px 1px 0 #f8fafc;
 }
