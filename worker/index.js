@@ -210,6 +210,7 @@ function buildStandingsRewriter(teams, battingStats, pitchingStats) {
             team.avg = bStats.avg || '-';
             team.hr = bStats.hr || '-';
             team.sb = bStats.sb || '-';
+            team.ops = bStats.ops || '-';
             team.era = pStats.era || '-';
 
             // 重複チェック（交流戦テーブルなどが続く場合があるため）
@@ -245,7 +246,7 @@ async function handleStandings(league, request, env) {
   }
 
   const year = getYear(request.url);
-  const cacheKey = `standings:${league}:${year}`;
+  const cacheKey = `standings:v2:${league}:${year}`;
   const cached = await getCachedJson(env, cacheKey, request);
   if (cached) return Response.json(cached);
 
@@ -286,9 +287,12 @@ async function handleStandings(league, request, env) {
 
     // 打撃・投手成績を並列でパース
     const [battingStats, pitchingStats] = await Promise.all([
-      parseExtraStats(tmbRes, 'tablefix2', 0, { 1: 'avg', 9: 'hr', 12: 'sb' }, isLegacy),
+      parseExtraStats(tmbRes, 'tablefix2', 0, { 1: 'avg', 9: 'hr', 12: 'sb', '-2': 'slg', '-1': 'obp' }, isLegacy),
       parseExtraStats(tmpRes, 'tablefix2', 0, { 1: 'era' }, isLegacy),
     ]);
+    Object.values(battingStats).forEach((stats) => {
+      stats.ops = calculateOps(stats.slg, stats.obp);
+    });
 
     const stdHtml = await stdRes.text();
     const updateNote = await buildStandingsUpdateNote(year, request, env);
@@ -352,6 +356,7 @@ function buildSpecialStandingsRewriter(teams) {
             era: '-',
             hr: '-',
             sb: '-',
+            ops: '-',
           });
         });
       },
@@ -526,6 +531,19 @@ function formatPct(wins, losses) {
   return value.toFixed(3).replace(/^0/, '');
 }
 
+function formatRate(value) {
+  if (!Number.isFinite(value)) return '-';
+  if (value === 1) return '1.000';
+  return value.toFixed(3).replace(/^0/, '');
+}
+
+function calculateOps(slg, obp) {
+  const slgValue = Number.parseFloat(slg);
+  const obpValue = Number.parseFloat(obp);
+  if (!Number.isFinite(slgValue) || !Number.isFinite(obpValue)) return '-';
+  return formatRate(slgValue + obpValue);
+}
+
 function formatGamesBehind(value) {
   if (value === 0) return '-';
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
@@ -673,7 +691,9 @@ async function parseExtraStats(res, tableClass, teamNameIdx, fieldMappings, isLe
             const teamName = normalizeTeamShortName(cells[teamNameIdx]);
             const s = {};
             for (const [idx, field] of Object.entries(fieldMappings)) {
-              s[field] = cells[idx] ?? '-';
+              const cellIndex = Number(idx);
+              const resolvedIndex = cellIndex < 0 ? cells.length + cellIndex : cellIndex;
+              s[field] = cells[resolvedIndex] ?? '-';
             }
             stats[teamName] = s;
           }
@@ -682,7 +702,7 @@ async function parseExtraStats(res, tableClass, teamNameIdx, fieldMappings, isLe
     });
   }
 
-  rewriter
+  await rewriter
     .on('table', {
       element(el) {
         if (isLegacy) return;
@@ -715,7 +735,9 @@ async function parseExtraStats(res, tableClass, teamNameIdx, fieldMappings, isLe
             const teamName = normalizeTeamShortName(cells[teamNameIdx]);
             const s = {};
             for (const [idx, field] of Object.entries(fieldMappings)) {
-              s[field] = cells[idx] ?? '-';
+              const cellIndex = Number(idx);
+              const resolvedIndex = cellIndex < 0 ? cells.length + cellIndex : cellIndex;
+              s[field] = cells[resolvedIndex] ?? '-';
             }
             stats[teamName] = s;
           }

@@ -3,6 +3,7 @@ import { getTeamInfo } from '../../data/teams';
 const METRICS = [
   { key: 'pct', label: '勝率', getValue: (team) => team.pct },
   { key: 'avg', label: '打率', getValue: (team) => team.avg },
+  { key: 'ops', label: 'OPS', getValue: (team) => team.ops },
   { key: 'hr', label: '本塁打', getValue: (team) => team.hr },
   { key: 'sb', label: '盗塁', getValue: (team) => team.sb },
   { key: 'era', label: '防御率(反転)', getValue: (team) => team.era, lowerBetter: true },
@@ -55,11 +56,12 @@ function buildSeries(teams) {
       name: team.name,
       pct: parseNumber(team.pct),
       avg: parseNumber(team.avg),
+      ops: parseNumber(team.ops),
       hr: parseNumber(team.hr),
       sb: parseNumber(team.sb),
       era: parseNumber(team.era),
     }))
-    .filter(team => team.pct !== null && team.avg !== null && team.hr !== null && team.sb !== null && team.era !== null);
+    .filter(team => METRICS.every(metric => metric.getValue(team) !== null));
 
   if (!values.length) return [];
 

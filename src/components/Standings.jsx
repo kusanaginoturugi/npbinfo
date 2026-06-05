@@ -61,6 +61,7 @@ function StandingsTable({ data, isFavorite, toggleFavorite }) {
             <th>勝率</th>
             <th>差</th>
             <th>打率</th>
+            <th>OPS</th>
             <th>防御率</th>
             <th>本塁打</th>
             <th>盗塁</th>
@@ -95,6 +96,7 @@ function StandingsTable({ data, isFavorite, toggleFavorite }) {
                 <td>{row.pct ?? '-'}</td>
                 <td>{row.gamesBehind ?? '-'}</td>
                 <td>{row.avg ?? '-'}</td>
+                <td>{row.ops ?? '-'}</td>
                 <td>{row.era ?? '-'}</td>
                 <td>{row.hr ?? '-'}</td>
                 <td>{row.sb ?? '-'}</td>

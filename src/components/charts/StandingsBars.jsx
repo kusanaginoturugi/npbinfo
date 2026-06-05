@@ -3,6 +3,7 @@ import { getTeamInfo } from '../../data/teams';
 
 const METRICS = [
   { key: 'avg', label: '打率', parse: (v) => Number.parseFloat(v), higherBetter: true, format: (v) => Number(v).toFixed(3) },
+  { key: 'ops', label: 'OPS', parse: (v) => Number.parseFloat(v), higherBetter: true, format: (v) => Number(v).toFixed(3) },
   { key: 'hr', label: '本塁打', parse: (v) => Number.parseInt(v, 10), higherBetter: true, format: (v) => String(v) },
   { key: 'sb', label: '盗塁', parse: (v) => Number.parseInt(v, 10), higherBetter: true, format: (v) => String(v) },
   { key: 'era', label: '防御率', parse: (v) => Number.parseFloat(v), higherBetter: false, format: (v) => Number(v).toFixed(2) },
