@@ -6,6 +6,19 @@
 // - /api/headtohead/:league   → チーム間対戦成績スクレイピング
 // - /og/standings/:league     → 順位表 OGP SVG
 // - その他                    → dist/ の静的アセットを返す
+const BUILD_INFO = {
+  buildId: __NPBINFO_BUILD_ID__,
+  buildTime: __NPBINFO_BUILD_TIME__,
+  gitRevision: __NPBINFO_GIT_REVISION__,
+};
+
+function jsonNoStore(data) {
+  return Response.json(data, {
+    headers: {
+      'Cache-Control': 'no-store',
+    },
+  });
+}
 
 // 年度取得用のヘルパー（リクエストのたびに計算する）
 function getCurrentYear() {
@@ -1480,6 +1493,14 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const segments = url.pathname.split('/').filter(Boolean);
+
+    // /api/debug
+    if (segments[0] === 'api' && segments[1] === 'debug') {
+      return jsonNoStore({
+        ...BUILD_INFO,
+        now: new Date().toISOString(),
+      });
+    }
 
     // /api/recent/:league?year=YYYY
     if (segments[0] === 'api' && segments[1] === 'recent' && segments[2]) {

@@ -2,6 +2,7 @@ import { Suspense, lazy, useMemo, useState, useEffect } from 'react';
 import { getContrastColor, getTeamInfo } from '../data/teams';
 import { useFavorites } from '../hooks/useFavorites';
 import { apiCache } from '../utils/apiCache';
+import { isDebugMode, withNoCache } from '../utils/debug';
 
 const LEAGUES = [
   { key: 'cl', label: 'セントラル・リーグ', color: '#003087' },
@@ -118,9 +119,24 @@ export default function Standings() {
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState({});
   const { isFavorite, toggleFavorite } = useFavorites();
+  const debugMode = isDebugMode();
 
-  const cacheKey = `standings:${activeLeague}:${year}`;
-  const shouldUseLocalCache = activeLeague !== 'cp';
+  const cacheKey = `standings:v2:${activeLeague}:${year}`;
+  const shouldUseLocalCache = !debugMode && activeLeague !== 'cp';
+
+  const handleRefresh = () => {
+    apiCache.remove(cacheKey);
+    setData(prev => {
+      const next = { ...prev };
+      delete next[cacheKey];
+      return next;
+    });
+    setLastUpdated(prev => {
+      const next = { ...prev };
+      delete next[cacheKey];
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (data[cacheKey]) return;
@@ -137,8 +153,8 @@ export default function Standings() {
     setLoading(true);
     setError(null);
     const params = new URLSearchParams({ year: String(year) });
-    if (!shouldUseLocalCache) params.set('nocache', '1');
-    fetch(`/api/standings/${activeLeague}?${params.toString()}`)
+    if (debugMode || activeLeague === 'cp') params.set('nocache', '1');
+    fetch(withNoCache(`/api/standings/${activeLeague}?${params.toString()}`))
       .then(r => r.json())
       .then(json => {
         if (json.error) throw new Error(json.error);
@@ -149,7 +165,7 @@ export default function Standings() {
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [activeLeague, year, data, cacheKey, shouldUseLocalCache]);
+  }, [activeLeague, year, data, cacheKey, shouldUseLocalCache, debugMode]);
 
   const activeInfo = LEAGUES.find(l => l.key === activeLeague);
   const standingsRows = useMemo(() => {
@@ -213,6 +229,17 @@ export default function Standings() {
             グラフ
           </button>
         </div>
+        {debugMode && (
+          <button
+            type="button"
+            className="year-select"
+            onClick={handleRefresh}
+            disabled={loading}
+            title="キャッシュを無視して再取得 (debug)"
+          >
+            ↻ 更新
+          </button>
+        )}
       </div>
       {!graphAvailable && viewMode === 'charts' && (
         <div className="status-msg">グラフ表示はセ・パリーグ選択時のみ有効です。</div>

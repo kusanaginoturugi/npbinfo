@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { TEAMS } from '../data/teams';
 import { useFavorites } from '../hooks/useFavorites';
 import { apiCache } from '../utils/apiCache';
+import { isDebugMode, withNoCache } from '../utils/debug';
 
 const LEAGUES = [
   { key: 'cl', label: 'セ・リーグ' },
@@ -115,17 +116,32 @@ export default function PlayerStats() {
   const [playerNameFilter, setPlayerNameFilter] = useState('');
   const [selectedTeams, setSelectedTeams] = useState([]);
   const { isFavorite } = useFavorites();
+  const debugMode = isDebugMode();
   
   // ソート設定: 初期状態は順位の昇順
   const [sortConfig, setSortConfig] = useState({ key: 'rank', direction: 'asc' });
 
   const cacheKey = `stats:${type}-${league}-${year}`;
 
+  const handleRefresh = () => {
+    apiCache.remove(cacheKey);
+    setCache(prev => {
+      const next = { ...prev };
+      delete next[cacheKey];
+      return next;
+    });
+    setLastUpdated(prev => {
+      const next = { ...prev };
+      delete next[cacheKey];
+      return next;
+    });
+  };
+
   useEffect(() => {
     if (cache[cacheKey]) return;
 
     // 1. localStorage キャッシュをチェック
-    const cached = apiCache.get(cacheKey);
+    const cached = debugMode ? null : apiCache.get(cacheKey);
     if (cached) {
       setCache(prev => ({ ...prev, [cacheKey]: cached.data }));
       setLastUpdated(prev => ({ ...prev, [cacheKey]: cached.timestamp }));
@@ -136,7 +152,9 @@ export default function PlayerStats() {
     setLoading(true);
     setError(null);
     setErrorDetail(null);
-    fetch(`/api/stats/${type}/${league}?year=${year}`)
+    const params = new URLSearchParams({ year: String(year) });
+    if (debugMode) params.set('nocache', '1');
+    fetch(withNoCache(`/api/stats/${type}/${league}?${params.toString()}`))
       .then(r => r.json())
       .then(json => {
         if (json.error) {
@@ -148,13 +166,13 @@ export default function PlayerStats() {
         const payload = { ...json, players: json.players ?? [] };
         setCache(prev => ({ ...prev, [cacheKey]: payload }));
         setLastUpdated(prev => ({ ...prev, [cacheKey]: now }));
-        apiCache.set(cacheKey, payload, year);
+        if (!debugMode) apiCache.set(cacheKey, payload, year);
       })
       .catch(e => {
         setError(e.message);
       })
       .finally(() => setLoading(false));
-  }, [cacheKey, cache, type, league, year]);
+  }, [cacheKey, cache, type, league, year, debugMode]);
 
   const handleSort = (key) => {
     setSortConfig(prev => {
@@ -283,6 +301,17 @@ export default function PlayerStats() {
           />
           お気に入りチームのみ
         </label>
+        {debugMode && (
+          <button
+            type="button"
+            className="year-select"
+            onClick={handleRefresh}
+            disabled={loading}
+            title="キャッシュを無視して再取得 (debug)"
+          >
+            ↻ 更新
+          </button>
+        )}
       </div>
 
       <div className="controls-row" style={{ marginTop: '12px', alignItems: 'center' }}>

@@ -3,7 +3,7 @@ import Standings from './components/Standings';
 import PlayerStats from './components/PlayerStats';
 import Schedule from './components/Schedule';
 import Stadiums from './components/Stadiums';
-import { syncDebugFromUrl } from './utils/debug';
+import { getBuildInfo, isDebugMode, syncDebugFromUrl, withNoCache } from './utils/debug';
 import './App.css';
 
 syncDebugFromUrl();
@@ -14,6 +14,47 @@ const TABS = [
   { key: 'schedule', label: '試合日程' },
   { key: 'stadiums', label: '球場情報' },
 ];
+
+function SystemStatus() {
+  const [apiInfo, setApiInfo] = useState(null);
+  const [error, setError] = useState(null);
+  const appInfo = getBuildInfo();
+  const debugMode = isDebugMode();
+
+  useEffect(() => {
+    fetch(withNoCache('/api/debug'), { cache: 'no-store' })
+      .then(r => r.json())
+      .then(json => {
+        setApiInfo(json);
+        setError(null);
+      })
+      .catch(e => setError(e.message));
+  }, []);
+
+  const refreshApp = async () => {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(key => caches.delete(key)));
+    }
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map(registration => registration.update()));
+    }
+    window.location.reload();
+  };
+
+  return (
+    <div className="system-status">
+      <span>App: {appInfo.buildId}</span>
+      <span>API: {apiInfo?.buildId ?? (error ? '取得失敗' : '確認中')}</span>
+      {debugMode && (
+        <button type="button" onClick={refreshApp} className="system-refresh">
+          更新確認
+        </button>
+      )}
+    </div>
+  );
+}
 
 function useTheme() {
   const [dark, setDark] = useState(() => {
@@ -102,6 +143,7 @@ export default function App() {
       </main>
 
       <footer className="app-footer">
+        <SystemStatus />
         <p>データ出典: npb.jp（公式）</p>
       </footer>
     </div>

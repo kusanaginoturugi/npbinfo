@@ -15,7 +15,12 @@ export default defineConfig([
     ],
     languageOptions: {
       ecmaVersion: 2020,
-      globals: globals.browser,
+      globals: {
+        ...globals.browser,
+        __NPBINFO_BUILD_ID__: 'readonly',
+        __NPBINFO_BUILD_TIME__: 'readonly',
+        __NPBINFO_GIT_REVISION__: 'readonly',
+      },
       parserOptions: {
         ecmaVersion: 'latest',
         ecmaFeatures: { jsx: true },

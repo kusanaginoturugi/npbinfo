@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiCache } from '../utils/apiCache';
-import { isDebugMode } from '../utils/debug';
+import { isDebugMode, withNoCache } from '../utils/debug';
 import { getContrastColor, getTeamInfo, getTeamLeague, normalizeTeamName } from '../data/teams';
 import { STADIUMS } from '../data/stadiums';
-import { formatTemperature, getWeatherIcon } from '../utils/weatherIcon';
+import { formatPrecipitation, formatTemperature, getWeatherIcon } from '../utils/weatherIcon';
 
 const CURRENT_DATE = new Date();
 const CURRENT_MONTH = `${CURRENT_DATE.getFullYear()}-${String(CURRENT_DATE.getMonth() + 1).padStart(2, '0')}`;
@@ -100,9 +100,11 @@ function getRecentGames(teamName, recentCache, year) {
 function RecentBadges({ games }) {
   if (!games || games.length === 0) return null;
 
+  const orderedGames = [...games].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
   return (
     <div className="schedule-recent-badges">
-      {games.map((g, idx) => {
+      {orderedGames.map((g, idx) => {
         let symbol = '△';
         let className = 'draw';
         if (g.won === true) {
@@ -114,7 +116,7 @@ function RecentBadges({ games }) {
         }
         const title = `${g.date} vs${g.vsTeam} (${g.won === true ? '勝' : g.won === false ? '敗' : '分'})`;
         return (
-          <span key={idx} className={`recent-badge ${className}`} title={title}>
+          <span key={`${g.date}-${g.vsTeam}-${idx}`} className={`recent-badge ${className}`} title={title}>
             {symbol}
           </span>
         );
@@ -163,17 +165,32 @@ function ScoreBlock({ game }) {
 function ScheduleWeather({ weatherState }) {
   if (!weatherState) return null;
   if (weatherState.loading) {
-    return <span className="schedule-weather">天気...</span>;
+    return (
+      <span className="schedule-weather" title="球場の天気予報を取得中">
+        <span className="schedule-weather-label">天気</span>
+        <span className="schedule-weather-main">取得中</span>
+      </span>
+    );
   }
   if (!weatherState.data) return null;
 
   const weather = getWeatherIcon(weatherState.data.weatherCode);
   return (
-    <span className="schedule-weather" title={weather.label}>
-      <span aria-hidden="true">{weather.icon}</span>
-      <span>{formatTemperature(weatherState.data.tempMax)}</span>
+    <span
+      className="schedule-weather"
+      title={`${weather.label} / 最高 ${formatTemperature(weatherState.data.tempMax)} / 最低 ${formatTemperature(weatherState.data.tempMin)} / ${formatPrecipitation(weatherState.data.precipitationProb)}`}
+    >
+      <span className="schedule-weather-label">天気</span>
+      <span className="schedule-weather-main">
+        <span aria-hidden="true">{weather.icon}</span>
+        <span>{weather.label}</span>
+      </span>
+      <span>最高 {formatTemperature(weatherState.data.tempMax)}</span>
       <span>/</span>
-      <span>{formatTemperature(weatherState.data.tempMin)}</span>
+      <span>最低 {formatTemperature(weatherState.data.tempMin)}</span>
+      {weatherState.data.precipitationProb !== null && weatherState.data.precipitationProb !== undefined && (
+        <span>{formatPrecipitation(weatherState.data.precipitationProb)}</span>
+      )}
     </span>
   );
 }
@@ -181,6 +198,11 @@ function ScheduleWeather({ weatherState }) {
 function HeadToHeadBadge({ record }) {
   if (!record) return null;
   return <span className="schedule-headtohead">今季 {record}</span>;
+}
+
+function StatusBadge({ status }) {
+  if (!status || status === '試合前') return null;
+  return <span className={`schedule-status status-${status}`}>{status}</span>;
 }
 
 function ScheduleCard({ game, weatherState, headToHeadRecord, homeRecent, awayRecent }) {
@@ -207,7 +229,7 @@ function ScheduleCard({ game, weatherState, headToHeadRecord, homeRecent, awayRe
       </div>
 
       <div className="schedule-meta">
-        <span className={`schedule-status status-${game.status}`}>{game.status}</span>
+        <StatusBadge status={game.status} />
         <span>{game.stadium || '-'}</span>
         <HeadToHeadBadge record={headToHeadRecord} />
         <ScheduleWeather weatherState={weatherState} />
@@ -238,8 +260,6 @@ export default function Schedule() {
   const cacheKey = `schedule:${month}`;
   const schedule = cache[cacheKey];
   const games = schedule?.games ?? [];
-
-  const withNoCache = (url) => (debugMode ? `${url}${url.includes('?') ? '&' : '?'}nocache=1` : url);
 
   const handleRefresh = () => {
     apiCache.remove(cacheKey);
@@ -353,7 +373,7 @@ export default function Schedule() {
     return () => {
       cancelled = true;
     };
-  }, [headToHeadCache, headToHeadLeagues, month]);
+  }, [headToHeadCache, headToHeadLeagues, month, debugMode]);
 
   useEffect(() => {
     if (!headToHeadLeagues.length) return;
@@ -387,7 +407,7 @@ export default function Schedule() {
     return () => {
       cancelled = true;
     };
-  }, [recentCache, headToHeadLeagues, month]);
+  }, [recentCache, headToHeadLeagues, month, debugMode]);
 
   useEffect(() => {
     if (!weatherTargets.length) return;
@@ -427,7 +447,7 @@ export default function Schedule() {
     return () => {
       cancelled = true;
     };
-  }, [weatherCache, weatherTargets]);
+  }, [weatherCache, weatherTargets, debugMode]);
 
   const formatTimestamp = (ts) => {
     if (!ts) return '';
