@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { getTeamInfo } from '../../data/teams';
 
 const METRICS = [
@@ -30,6 +29,7 @@ export default function StandingsBars({ teams }) {
   const [metricKey, setMetricKey] = useState('avg');
   const metric = METRICS.find(item => item.key === metricKey) ?? METRICS[0];
   const rows = useMemo(() => buildRows(teams, metric), [teams, metric]);
+  const maxValue = Math.max(...rows.map(row => row.value), 0);
 
   if (!rows.length) {
     return <div className="status-msg">比較グラフ用データが不足しています</div>;
@@ -52,20 +52,26 @@ export default function StandingsBars({ teams }) {
           ))}
         </div>
       </div>
-      <div className="chart-shell">
-        <ResponsiveContainer width="100%" height={380}>
-          <BarChart data={rows} layout="vertical" margin={{ top: 8, right: 16, bottom: 8, left: 16 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis type="number" />
-            <YAxis type="category" dataKey="code" width={42} />
-            <Tooltip formatter={(value) => metric.format(value)} />
-            <Bar dataKey="value" radius={[0, 6, 6, 0]}>
-              {rows.map((row) => (
-                <Cell key={row.name} fill={row.color} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+      <div className="bar-chart-list" role="img" aria-label={`${metric.label}のチーム比較`}>
+        {rows.map((row) => {
+          const width = maxValue > 0 ? Math.max(2, (row.value / maxValue) * 100) : 0;
+          return (
+            <div key={row.name} className="bar-chart-row">
+              <div className="bar-chart-team">
+                <span className="bar-chart-code">{row.code}</span>
+                <span className="bar-chart-name">{row.name}</span>
+              </div>
+              <div className="bar-chart-track">
+                <span
+                  className="bar-chart-fill"
+                  style={{ width: `${width}%`, background: row.color }}
+                  title={`${row.name}: ${metric.format(row.value)}`}
+                />
+              </div>
+              <div className="bar-chart-value">{metric.format(row.value)}</div>
+            </div>
+          );
+        })}
       </div>
       <p className="chart-note">{metric.label} {metric.higherBetter ? '高い順' : '低い順'}に表示。</p>
     </div>
