@@ -1,0 +1,34 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "npbinfo-og-generator",
+  "main": "index.js",
+  "compatibility_date": "2026-04-15",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "browser": {
+    "binding": "BROWSER"
+  },
+  "services": [
+    {
+      "binding": "NPBINFO",
+      "service": "npbinfo"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      "id": "380a38d6849144f28fb6571b7b775c47"
+    }
+  ],
+  "triggers": {
+    "crons": [
+      "30 12 * * *",
+      "30 15 * * *",
+      "30 18 * * *"
+    ]
+  },
+  "observability": {
+    "enabled": true
+  }
+}

@@ -1332,6 +1332,26 @@ async function handleStandingsOgPng(league, request, env) {
     'Cache-Control': 'public, max-age=300',
   };
 
+  if (env.CACHE) {
+    try {
+      const generated = await env.CACHE.getWithMetadata(
+        `og:standings:${league}:png`,
+        'arrayBuffer',
+      );
+      if (generated.value) {
+        headers['X-OGP-Source'] = 'browser-run';
+        if (generated.metadata?.generatedAt) {
+          headers['X-OGP-Generated-At'] = generated.metadata.generatedAt;
+        }
+        return new Response(request.method === 'HEAD' ? null : generated.value, { headers });
+      }
+    } catch (err) {
+      console.error(`Failed to read generated OGP for ${league}: ${err.message}`);
+    }
+  }
+
+  headers['X-OGP-Source'] = 'bitmap-fallback';
+
   if (request.method === 'HEAD') {
     return new Response(null, { headers });
   }

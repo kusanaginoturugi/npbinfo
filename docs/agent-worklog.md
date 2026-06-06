@@ -6,6 +6,7 @@
 
 - Issue #30 の英語による人間向け画面 URL を追加する。
 - 既存 API を変更せず、画面選択と URL、ブラウザ履歴を同期する。
+- 順位表から阪神タイガースの詳細画面を開き、X公開Listを表示する。
 
 ### Work Log
 
@@ -14,6 +15,9 @@
 - ブラウザの戻る・進むと不正な URL の既定画面への正規化に対応した。
 - SPA の直リンクを Worker から返せるよう、Static Assets の `ASSETS` binding を明示した。
 - 既存の `/api/*` エンドポイントは変更していない。
+- `/teams/hanshin` を追加し、順位表の阪神チーム名から遷移できるようにした。
+- 阪神詳細画面にX公開List `2063091274643886176` の公式埋め込みを追加した。
+- X埋め込みがブロックまたはレート制限された場合は、公開Listを直接開くリンクを表示する。
 
 ### Verification
 
@@ -46,6 +50,14 @@
 - `/og/standings/:league.png` を追加し、OGP 用順位表 PNG を返すようにした。
 - 既存の `/og/standings/:league` SVG エンドポイントは維持した。
 - トップページの `og:image` / `twitter:image` を PNG URL に切り替えた。
+- OGP 生成を `og-worker/` に分離し、Cloudflare Browser Rendering で日本語の順位表と
+  チーム打率・OPS・防御率グラフを PNG 化して共通 KV に保存する構成を追加した。
+- JST 21:30 と 00:30 は順位データ変更時のみ、03:30 は保険として強制生成する。
+- メイン Worker は Browser Rendering 画像を優先し、未生成時は従来画像へフォールバックする。
+- OGP Worker `2f9584ec-b936-4488-a53c-70dea28ca18f` とメイン Worker
+  `8c2e3bb9-6b21-4169-8650-4c7845f99900` をデプロイした。
+- 本番で3リーグの PNG 生成を実行し、1200x630、日本語表示、KV経由の配信、
+  `X-OGP-Source: browser-run` を確認した。
 
 ### Handoff
 

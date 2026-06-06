@@ -49,6 +49,10 @@ export function stadiumPath(stadiumId) {
   return `/stadiums/${stadiumId}`;
 }
 
+export function teamPath(teamSlug) {
+  return `/teams/${teamSlug}`;
+}
+
 export function defaultRoute(tab = 'standings') {
   const year = new Date().getFullYear();
 
@@ -119,6 +123,14 @@ export function parseRoute(pathname) {
       tab: 'stadiums',
       stadiumId: segments[1],
       path: stadiumPath(segments[1]),
+    };
+  }
+
+  if (segments[0] === 'teams' && segments.length === 2 && segments[1] === 'hanshin') {
+    return {
+      tab: 'team',
+      team: 'hanshin',
+      path: teamPath('hanshin'),
     };
   }
 

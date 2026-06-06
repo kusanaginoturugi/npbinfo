@@ -46,7 +46,7 @@ function FavoriteButton({ teamName, isFavorite, toggleFavorite }) {
   );
 }
 
-function StandingsTable({ data, isFavorite, toggleFavorite }) {
+function StandingsTable({ data, isFavorite, toggleFavorite, onSelectTeam }) {
   if (!data?.length) return null;
   return (
     <div className="table-wrapper">
@@ -87,8 +87,21 @@ function StandingsTable({ data, isFavorite, toggleFavorite }) {
                     isFavorite={favorited} 
                     toggleFavorite={toggleFavorite} 
                   />
-                  <TeamBadge name={teamName} />
-                  {displayName || '-'}
+                  {teamName === '阪神' ? (
+                    <button
+                      type="button"
+                      className="team-detail-link"
+                      onClick={() => onSelectTeam?.(teamName)}
+                    >
+                      <TeamBadge name={teamName} />
+                      <span>{displayName || '-'}</span>
+                    </button>
+                  ) : (
+                    <>
+                      <TeamBadge name={teamName} />
+                      {displayName || '-'}
+                    </>
+                  )}
                 </td>
                 <td>{row.playGameCount ?? '-'}</td>
                 <td>{row.win ?? '-'}</td>
@@ -110,7 +123,12 @@ function StandingsTable({ data, isFavorite, toggleFavorite }) {
   );
 }
 
-export default function Standings({ initialLeague = 'cl', initialYear = new Date().getFullYear(), onRouteChange }) {
+export default function Standings({
+  initialLeague = 'cl',
+  initialYear = new Date().getFullYear(),
+  onRouteChange,
+  onSelectTeam,
+}) {
   const [activeLeague, setActiveLeague] = useState(initialLeague);
   const [viewMode, setViewMode] = useState('table');
   const [year, setYear] = useState(initialYear);
@@ -267,6 +285,7 @@ export default function Standings({ initialLeague = 'cl', initialYear = new Date
               data={standingsRows}
               isFavorite={isFavorite}
               toggleFavorite={toggleFavorite}
+              onSelectTeam={onSelectTeam}
             />
           )}
           {viewMode === 'charts' && graphAvailable && (

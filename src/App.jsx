@@ -3,6 +3,7 @@ import Standings from './components/Standings';
 import PlayerStats from './components/PlayerStats';
 import Schedule from './components/Schedule';
 import Stadiums from './components/Stadiums';
+import TeamTimeline from './components/TeamTimeline';
 import { getBuildInfo, isDebugMode, syncDebugFromUrl, withNoCache } from './utils/debug';
 import {
   defaultRoute,
@@ -11,6 +12,7 @@ import {
   stadiumPath,
   standingsPath,
   statsPath,
+  teamPath,
 } from './utils/routes';
 import './App.css';
 
@@ -117,6 +119,11 @@ export default function App() {
     navigate({ tab: 'stadiums', stadiumId, path: stadiumPath(stadiumId) });
   };
 
+  const openTeam = (team) => {
+    if (team !== '阪神') return;
+    navigate({ tab: 'team', team: 'hanshin', path: teamPath('hanshin') });
+  };
+
   return (
     <div className="app">
       <header className="app-header">
@@ -171,6 +178,7 @@ export default function App() {
             key={route.path}
             initialLeague={route.league}
             initialYear={route.year}
+            onSelectTeam={openTeam}
             onRouteChange={(league, year) => navigate({
               tab: 'standings',
               league,
@@ -212,6 +220,9 @@ export default function App() {
             selectedStadiumId={route.stadiumId}
             onSelectStadium={openStadium}
           />
+        )}
+        {route.tab === 'team' && route.team === 'hanshin' && (
+          <TeamTimeline key={`${route.path}-${dark ? 'dark' : 'light'}`} dark={dark} />
         )}
       </main>
 
