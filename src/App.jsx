@@ -4,6 +4,14 @@ import PlayerStats from './components/PlayerStats';
 import Schedule from './components/Schedule';
 import Stadiums from './components/Stadiums';
 import { getBuildInfo, isDebugMode, syncDebugFromUrl, withNoCache } from './utils/debug';
+import {
+  defaultRoute,
+  parseRoute,
+  schedulePath,
+  stadiumPath,
+  standingsPath,
+  statsPath,
+} from './utils/routes';
 import './App.css';
 
 syncDebugFromUrl();
@@ -72,15 +80,15 @@ function useTheme() {
 }
 
 export default function App() {
-  const [tab, setTab] = useState('standings');
-  const [selectedStadiumId, setSelectedStadiumId] = useState(null);
+  const [route, setRoute] = useState(() => parseRoute(window.location.pathname));
   const [dark, setDark] = useTheme();
   const [showOptions, setShowOptions] = useState(false);
   const optionsRef = useRef(null);
 
-  const openStadium = (stadiumId) => {
-    setSelectedStadiumId(stadiumId);
-    setTab('stadiums');
+  const navigate = (nextRoute, { replace = false } = {}) => {
+    const method = replace ? 'replaceState' : 'pushState';
+    window.history[method](null, '', `${nextRoute.path}${window.location.search}`);
+    setRoute(nextRoute);
   };
 
   useEffect(() => {
@@ -92,6 +100,22 @@ export default function App() {
     document.addEventListener('mousedown', onClickOutside);
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (window.location.pathname !== route.path) {
+      window.history.replaceState(null, '', `${route.path}${window.location.search}`);
+    }
+
+    const onPopState = () => setRoute(parseRoute(window.location.pathname));
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [route.path]);
+
+  const selectTab = (tab) => navigate(defaultRoute(tab));
+
+  const openStadium = (stadiumId) => {
+    navigate({ tab: 'stadiums', stadiumId, path: stadiumPath(stadiumId) });
+  };
 
   return (
     <div className="app">
@@ -106,8 +130,8 @@ export default function App() {
             {TABS.map(t => (
               <button
                 key={t.key}
-                className={`nav-tab ${tab === t.key ? 'active' : ''}`}
-                onClick={() => setTab(t.key)}
+                className={`nav-tab ${route.tab === t.key ? 'active' : ''}`}
+                onClick={() => selectTab(t.key)}
               >
                 {t.label}
               </button>
@@ -142,10 +166,53 @@ export default function App() {
       </header>
 
       <main className="app-main">
-        {tab === 'standings' && <Standings />}
-        {tab === 'players' && <PlayerStats />}
-        {tab === 'schedule' && <Schedule onSelectStadium={openStadium} />}
-        {tab === 'stadiums' && <Stadiums selectedStadiumId={selectedStadiumId} />}
+        {route.tab === 'standings' && (
+          <Standings
+            key={route.path}
+            initialLeague={route.league}
+            initialYear={route.year}
+            onRouteChange={(league, year) => navigate({
+              tab: 'standings',
+              league,
+              year,
+              path: standingsPath(league, year),
+            })}
+          />
+        )}
+        {route.tab === 'players' && (
+          <PlayerStats
+            key={route.path}
+            initialType={route.type}
+            initialLeague={route.league}
+            initialYear={route.year}
+            onRouteChange={(type, league, year) => navigate({
+              tab: 'players',
+              type,
+              league,
+              year,
+              path: statsPath(type, league, year),
+            })}
+          />
+        )}
+        {route.tab === 'schedule' && (
+          <Schedule
+            key={route.path}
+            initialMonth={route.month}
+            onMonthChange={(month) => navigate({
+              tab: 'schedule',
+              month,
+              path: schedulePath(month),
+            })}
+            onSelectStadium={openStadium}
+          />
+        )}
+        {route.tab === 'stadiums' && (
+          <Stadiums
+            key={route.path}
+            selectedStadiumId={route.stadiumId}
+            onSelectStadium={openStadium}
+          />
+        )}
       </main>
 
       <footer className="app-footer">

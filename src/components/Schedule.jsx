@@ -270,8 +270,8 @@ function ScheduleCard({ game, weatherState, headToHeadRecord, homeRecent, awayRe
   );
 }
 
-export default function Schedule({ onSelectStadium }) {
-  const [month, setMonth] = useState(CURRENT_MONTH);
+export default function Schedule({ initialMonth = CURRENT_MONTH, onMonthChange, onSelectStadium }) {
+  const [month, setMonth] = useState(initialMonth);
   const [selectedDate, setSelectedDate] = useState(formatDateValue(CURRENT_DATE));
   const [cache, setCache] = useState({});
   const [loading, setLoading] = useState(false);
@@ -488,7 +488,10 @@ export default function Schedule({ onSelectStadium }) {
         <input
           type="month"
           value={month}
-          onChange={(e) => setMonth(e.target.value)}
+          onChange={(e) => {
+            setMonth(e.target.value);
+            onMonthChange?.(e.target.value);
+          }}
           className="year-select"
         />
         <select

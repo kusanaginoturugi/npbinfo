@@ -186,22 +186,21 @@ function StadiumDetail({ stadium }) {
   );
 }
 
-export default function Stadiums({ selectedStadiumId }) {
+export default function Stadiums({ selectedStadiumId, onSelectStadium }) {
   const [selectedId, setSelectedId] = useState(selectedStadiumId ?? STADIUMS[0].id);
   const mapElementRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef(new Map());
+  const onSelectStadiumRef = useRef(onSelectStadium);
+
+  useEffect(() => {
+    onSelectStadiumRef.current = onSelectStadium;
+  }, [onSelectStadium]);
 
   const selectedStadium = useMemo(
     () => STADIUMS.find(stadium => stadium.id === selectedId) ?? STADIUMS[0],
     [selectedId],
   );
-
-  useEffect(() => {
-    if (selectedStadiumId && STADIUMS.some(stadium => stadium.id === selectedStadiumId)) {
-      setSelectedId(selectedStadiumId);
-    }
-  }, [selectedStadiumId]);
 
   useEffect(() => {
     if (!mapElementRef.current || mapRef.current) return;
@@ -223,7 +222,10 @@ export default function Stadiums({ selectedStadiumId }) {
         icon: createMarkerIcon(stadium, stadium.id === STADIUMS[0].id),
         title: stadium.name,
       });
-      marker.on('click', () => setSelectedId(stadium.id));
+      marker.on('click', () => {
+        setSelectedId(stadium.id);
+        onSelectStadiumRef.current?.(stadium.id);
+      });
       marker.addTo(map);
       marker.bindTooltip(stadium.name, { direction: 'top', offset: [0, -16] });
       markers.set(stadium.id, marker);
@@ -265,7 +267,10 @@ export default function Stadiums({ selectedStadiumId }) {
               key={stadium.id}
               stadium={stadium}
               selected={stadium.id === selectedId}
-              onSelect={setSelectedId}
+              onSelect={(stadiumId) => {
+                setSelectedId(stadiumId);
+                onSelectStadium?.(stadiumId);
+              }}
             />
           ))}
         </div>

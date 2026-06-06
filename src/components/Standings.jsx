@@ -110,10 +110,10 @@ function StandingsTable({ data, isFavorite, toggleFavorite }) {
   );
 }
 
-export default function Standings() {
-  const [activeLeague, setActiveLeague] = useState('cl');
+export default function Standings({ initialLeague = 'cl', initialYear = new Date().getFullYear(), onRouteChange }) {
+  const [activeLeague, setActiveLeague] = useState(initialLeague);
   const [viewMode, setViewMode] = useState('table');
-  const [year, setYear] = useState(new Date().getFullYear());
+  const [year, setYear] = useState(initialYear);
   const [data, setData] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -196,7 +196,10 @@ export default function Standings() {
             <button
               key={l.key}
               className={`tab-btn ${activeLeague === l.key ? 'active' : ''}`}
-              onClick={() => setActiveLeague(l.key)}
+              onClick={() => {
+                setActiveLeague(l.key);
+                onRouteChange?.(l.key, year);
+              }}
             >
               {l.label}
             </button>
@@ -204,7 +207,11 @@ export default function Standings() {
         </div>
         <select
           value={year}
-          onChange={(e) => setYear(parseInt(e.target.value, 10))}
+          onChange={(e) => {
+            const nextYear = parseInt(e.target.value, 10);
+            setYear(nextYear);
+            onRouteChange?.(activeLeague, nextYear);
+          }}
           className="year-select"
         >
           {years.map(y => (

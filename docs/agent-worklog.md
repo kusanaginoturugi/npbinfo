@@ -1,5 +1,28 @@
 # Agent Worklog
 
+## 2026-06-06
+
+### Plan
+
+- Issue #30 の英語による人間向け画面 URL を追加する。
+- 既存 API を変更せず、画面選択と URL、ブラウザ履歴を同期する。
+
+### Work Log
+
+- 順位表、選手成績、試合日程、球場情報に直接アクセスできる URL を追加した。
+- 画面内のリーグ、年度、種別、月、球場選択で URL が更新されるようにした。
+- ブラウザの戻る・進むと不正な URL の既定画面への正規化に対応した。
+- SPA の直リンクを Worker から返せるよう、Static Assets の `ASSETS` binding を明示した。
+- 既存の `/api/*` エンドポイントは変更していない。
+
+### Verification
+
+- `npm run build` 成功。
+- ルート解析で順位表、選手成績、試合日程、球場情報、不正 URL の正規化を確認。
+- Vite + Cloudflare 開発サーバで主要な直リンクがすべて `200 text/html` を返すことを確認。
+- 本番へ deploy 済み。Cloudflare Workers Version ID: `88b2276d-e722-463d-8c7c-39e635054aad`。
+- 対象全体の ESLint は既存の `react-hooks/set-state-in-effect` などで失敗。新規の `App.jsx` と `routes.js` は ESLint 成功。
+
 ## 2026-06-05
 
 ### Plan

@@ -103,10 +103,15 @@ function StatsTable({ players, type, sortConfig, onSort }) {
   );
 }
 
-export default function PlayerStats() {
-  const [league, setLeague] = useState('cl');
-  const [type, setType] = useState('batting');
-  const [year, setYear] = useState(new Date().getFullYear());
+export default function PlayerStats({
+  initialLeague = 'cl',
+  initialType = 'batting',
+  initialYear = new Date().getFullYear(),
+  onRouteChange,
+}) {
+  const [league, setLeague] = useState(initialLeague);
+  const [type, setType] = useState(initialType);
+  const [year, setYear] = useState(initialYear);
   const [cache, setCache] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -265,6 +270,7 @@ export default function PlayerStats() {
               className={`tab-btn ${type === t.key ? 'active' : ''}`}
               onClick={() => {
                 setType(t.key);
+                onRouteChange?.(t.key, league, year);
                 setSortConfig({ key: 'rank', direction: 'asc' }); // タイプ切り替え時はソートリセット
               }}
             >
@@ -277,7 +283,10 @@ export default function PlayerStats() {
             <button
               key={l.key}
               className={`tab-btn ${league === l.key ? 'active' : ''}`}
-              onClick={() => setLeague(l.key)}
+              onClick={() => {
+                setLeague(l.key);
+                onRouteChange?.(type, l.key, year);
+              }}
             >
               {l.label}
             </button>
@@ -285,7 +294,11 @@ export default function PlayerStats() {
         </div>
         <select
           value={year}
-          onChange={(e) => setYear(parseInt(e.target.value, 10))}
+          onChange={(e) => {
+            const nextYear = parseInt(e.target.value, 10);
+            setYear(nextYear);
+            onRouteChange?.(type, league, nextYear);
+          }}
           className="year-select"
         >
           {years.map(y => (
