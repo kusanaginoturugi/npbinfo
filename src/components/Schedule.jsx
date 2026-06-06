@@ -356,15 +356,13 @@ export default function Schedule({ initialMonth = CURRENT_MONTH, onMonthChange, 
 
   useEffect(() => {
     if (!availableDates.length) return;
+    if (availableDates.includes(selectedDate)) return;
 
     const today = formatDateValue(CURRENT_DATE);
-    if (month === CURRENT_MONTH && availableDates.includes(today)) {
-      setSelectedDate(today);
-      return;
-    }
-    if (!availableDates.includes(selectedDate)) {
-      setSelectedDate(availableDates[0]);
-    }
+    const nextDate = month === CURRENT_MONTH && availableDates.includes(today)
+      ? today
+      : availableDates[0];
+    setSelectedDate(nextDate);
   }, [availableDates, month, selectedDate]);
 
   const selectedGames = useMemo(

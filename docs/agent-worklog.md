@@ -64,10 +64,14 @@
 - 試合結果表示を Cloudflare Workers Version
   `f98e1333-bee1-4009-acb7-7073b07e50c5` としてデプロイした。
 - ローカルの Gemini 設定を commit 対象から外すため、`.gemini/` を `.gitignore` に追加した。
+- 試合日程の日付選択後に当日へ戻る不具合を修正した。選択日が候補にある間は維持し、
+  月変更などで候補外になった場合だけ当日または最初の開催日へ補正する。
+- 日付選択修正を Cloudflare Workers Version
+  `47e58bf0-7044-4a0a-904c-d2b8a1c29626` としてデプロイした。
 
 ### Handoff
 
 - `.gemini/` はローカルエージェント設定として `.gitignore` 対象。
 - `npm run build` は成功。
 - `npx eslint .` は既存の `react-hooks/set-state-in-effect`、Worker の `HTMLRewriter` global、未使用変数などで失敗する状態。今回追加した build 定数の `no-undef` は `eslint.config.js` で解消済み。
-- 最終 deploy 済み。Cloudflare Workers Version ID: `f98e1333-bee1-4009-acb7-7073b07e50c5`。
+- 最終 deploy 済み。Cloudflare Workers Version ID: `47e58bf0-7044-4a0a-904c-d2b8a1c29626`。
