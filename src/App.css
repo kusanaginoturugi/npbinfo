@@ -691,6 +691,67 @@ body {
   justify-content: flex-end;
 }
 
+.schedule-team.result-勝 {
+  font-weight: 800;
+}
+
+.schedule-team.result-敗 {
+  color: var(--color-footer);
+}
+
+.schedule-team-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.schedule-outcome {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.schedule-team .schedule-outcome {
+  overflow: visible;
+}
+
+.outcome-勝 {
+  background: #e8f5ec;
+  color: #166534;
+}
+
+.outcome-敗 {
+  background: #f1f3f5;
+  color: #667085;
+}
+
+.outcome-分 {
+  background: #fff7e6;
+  color: #8a4b00;
+}
+
+[data-theme="dark"] .outcome-勝 {
+  background: #163322;
+  color: #7dd39a;
+}
+
+[data-theme="dark"] .outcome-敗 {
+  background: #252a33;
+  color: #aab2c0;
+}
+
+[data-theme="dark"] .outcome-分 {
+  background: #2d2112;
+  color: #f0b35a;
+}
+
 .schedule-team-badge {
   display: inline-flex;
   align-items: center;
@@ -716,6 +777,19 @@ body {
   justify-content: center;
   gap: 8px;
   font-size: 18px;
+}
+
+.schedule-result {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 72px;
+}
+
+.schedule-result-status {
+  color: var(--color-footer);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .schedule-score-separator {
@@ -1208,9 +1282,14 @@ button.schedule-weather:hover {
   }
 
   .schedule-score,
-  .schedule-time {
+  .schedule-time,
+  .schedule-result {
     text-align: left;
     justify-content: flex-start;
+  }
+
+  .schedule-result {
+    justify-items: start;
   }
 
   .stadium-list {

@@ -58,10 +58,16 @@
   `8c2e3bb9-6b21-4169-8650-4c7845f99900` をデプロイした。
 - 本番で3リーグの PNG 生成を実行し、1200x630、日本語表示、KV経由の配信、
   `X-OGP-Source: browser-run` を確認した。
+- 試合日程カードの終了試合にスコアと「試合終了」を表示し、両チームへ勝・敗・分を付けた。
+- 勝者を強調し、敗者を抑えた表示に変更した。NPBのスコアリンクは「試合詳細」とした。
+- 終了試合カードをデスクトップと390px幅で確認し、横並び・縦並びともに崩れがないことを確認した。
+- 試合結果表示を Cloudflare Workers Version
+  `f98e1333-bee1-4009-acb7-7073b07e50c5` としてデプロイした。
+- ローカルの Gemini 設定を commit 対象から外すため、`.gemini/` を `.gitignore` に追加した。
 
 ### Handoff
 
-- `.gemini/settings.json` は作業前から未追跡で存在しており、今回の commit 対象外。
+- `.gemini/` はローカルエージェント設定として `.gitignore` 対象。
 - `npm run build` は成功。
 - `npx eslint .` は既存の `react-hooks/set-state-in-effect`、Worker の `HTMLRewriter` global、未使用変数などで失敗する状態。今回追加した build 定数の `no-undef` は `eslint.config.js` で解消済み。
-- 最終 deploy 済み。Cloudflare Workers Version ID: `40eaf01b-a75b-4dbc-a5ea-6e5a03880c20`。
+- 最終 deploy 済み。Cloudflare Workers Version ID: `f98e1333-bee1-4009-acb7-7073b07e50c5`。

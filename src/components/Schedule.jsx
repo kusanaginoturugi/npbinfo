@@ -143,9 +143,26 @@ function TeamBadge({ name }) {
   );
 }
 
-function TeamName({ name }) {
+function TeamName({ name, outcome }) {
   const info = getTeamInfo(name);
-  return <span>{info?.official ?? name ?? '-'}</span>;
+  return (
+    <span className="schedule-team-name">
+      <span>{info?.official ?? name ?? '-'}</span>
+      {outcome && <span className={`schedule-outcome outcome-${outcome}`}>{outcome}</span>}
+    </span>
+  );
+}
+
+function getGameResult(game) {
+  if (game.homeScore === null || game.awayScore === null) return null;
+
+  const homeScore = Number.parseInt(game.homeScore, 10);
+  const awayScore = Number.parseInt(game.awayScore, 10);
+  if (!Number.isFinite(homeScore) || !Number.isFinite(awayScore)) return null;
+  if (homeScore === awayScore) return { home: '分', away: '分' };
+  return homeScore > awayScore
+    ? { home: '勝', away: '敗' }
+    : { home: '敗', away: '勝' };
 }
 
 function ScoreBlock({ game }) {
@@ -154,10 +171,13 @@ function ScoreBlock({ game }) {
   }
 
   return (
-    <div className="schedule-score">
-      <span>{game.homeScore}</span>
-      <span className="schedule-score-separator">-</span>
-      <span>{game.awayScore}</span>
+    <div className="schedule-result">
+      <div className="schedule-score">
+        <span>{game.homeScore}</span>
+        <span className="schedule-score-separator">-</span>
+        <span>{game.awayScore}</span>
+      </div>
+      <span className="schedule-result-status">試合終了</span>
     </div>
   );
 }
@@ -212,7 +232,7 @@ function HeadToHeadBadge({ record }) {
 }
 
 function StatusBadge({ status }) {
-  if (!status || status === '試合前') return null;
+  if (!status || status === '試合前' || status === '終了') return null;
   return <span className={`schedule-status status-${status}`}>{status}</span>;
 }
 
@@ -232,22 +252,24 @@ function StadiumMeta({ game, stadium, onSelectStadium }) {
 }
 
 function ScheduleCard({ game, weatherState, headToHeadRecord, homeRecent, awayRecent, stadium, onSelectStadium }) {
+  const result = getGameResult(game);
+
   return (
     <article className="schedule-card">
       <div className="schedule-match">
-        <div className="schedule-team">
+        <div className={`schedule-team ${result ? `result-${result.home}` : ''}`}>
           <TeamBadge name={game.homeTeam} />
           <div className="schedule-team-info">
-            <TeamName name={game.homeTeam} />
+            <TeamName name={game.homeTeam} outcome={result?.home} />
             <RecentBadges games={homeRecent} />
           </div>
         </div>
 
         <ScoreBlock game={game} />
 
-        <div className="schedule-team schedule-team-away">
+        <div className={`schedule-team schedule-team-away ${result ? `result-${result.away}` : ''}`}>
           <div className="schedule-team-info schedule-team-info-away">
-            <TeamName name={game.awayTeam} />
+            <TeamName name={game.awayTeam} outcome={result?.away} />
             <RecentBadges games={awayRecent} />
           </div>
           <TeamBadge name={game.awayTeam} />
@@ -261,7 +283,7 @@ function ScheduleCard({ game, weatherState, headToHeadRecord, homeRecent, awayRe
         <ScheduleWeather weatherState={weatherState} stadium={stadium} onSelectStadium={onSelectStadium} />
         {game.scoreUrl && (
           <a href={game.scoreUrl} target="_blank" rel="noreferrer">
-            NPB
+            試合詳細
           </a>
         )}
       </div>
