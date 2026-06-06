@@ -2,11 +2,11 @@ import { getTeamInfo } from '../../data/teams';
 
 const METRICS = [
   { key: 'pct', label: '勝率', getValue: (team) => team.pct },
-  { key: 'avg', label: '打率', getValue: (team) => team.avg },
   { key: 'ops', label: 'OPS', getValue: (team) => team.ops },
   { key: 'hr', label: '本塁打', getValue: (team) => team.hr },
   { key: 'sb', label: '盗塁', getValue: (team) => team.sb },
   { key: 'era', label: '防御率(反転)', getValue: (team) => team.era, lowerBetter: true },
+  { key: 'errors', label: '守備安定', getValue: (team) => team.errors, lowerBetter: true },
 ];
 
 function parseNumber(value) {
@@ -55,11 +55,11 @@ function buildSeries(teams) {
     .map((team) => ({
       name: team.name,
       pct: parseNumber(team.pct),
-      avg: parseNumber(team.avg),
       ops: parseNumber(team.ops),
       hr: parseNumber(team.hr),
       sb: parseNumber(team.sb),
       era: parseNumber(team.era),
+      errors: parseNumber(team.errors),
     }))
     .filter(team => METRICS.every(metric => metric.getValue(team) !== null));
 
@@ -152,7 +152,7 @@ export default function StandingsRadar({ teams }) {
           </span>
         ))}
       </div>
-      <p className="chart-note">各指標はリーグ内の最小値を0、最大値を100にした相対スケールで表示。防御率は低いほど良いため反転。</p>
+      <p className="chart-note">各指標はリーグ内の最小値を0、最大値を100にした相対スケールで表示。防御率と守備安定（失策数）は少ないほど高評価。</p>
     </div>
   );
 }

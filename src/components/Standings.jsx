@@ -139,7 +139,7 @@ export default function Standings({
   const { isFavorite, toggleFavorite } = useFavorites();
   const debugMode = isDebugMode();
 
-  const cacheKey = `standings:v2:${activeLeague}:${year}`;
+  const cacheKey = `standings:v3:${activeLeague}:${year}`;
   const shouldUseLocalCache = !debugMode && activeLeague !== 'cp';
 
   const handleRefresh = () => {

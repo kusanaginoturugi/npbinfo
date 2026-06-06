@@ -216,7 +216,7 @@ function renderHtml(data, league) {
       </table>
     </section>
     <section class="metrics">
-      ${renderBars(teams, 'avg', 'チーム打率')}
+      ${renderBars(teams, 'errors', '失策（少ないほど良い）', true)}
       ${renderBars(teams, 'ops', 'チームOPS')}
       ${renderBars(teams, 'era', 'チーム防御率', true)}
     </section>
@@ -247,7 +247,7 @@ function standingsSignature(data) {
     team.draw,
     team.pct,
     team.gamesBehind,
-    team.avg,
+    team.errors,
     team.ops,
     team.era,
   ]));

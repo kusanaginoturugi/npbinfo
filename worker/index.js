@@ -174,7 +174,7 @@ const STANDINGS_FIELDS = {
   4: 'draw', 5: 'pct', 6: 'gamesBehind',
 };
 
-function buildStandingsRewriter(teams, battingStats, pitchingStats) {
+function buildStandingsRewriter(teams, battingStats, pitchingStats, fieldingStats) {
   let inTable = false;
   let tableDepth = 0;
   let targetTableDepth = -1;
@@ -221,11 +221,13 @@ function buildStandingsRewriter(teams, battingStats, pitchingStats) {
             // 追加成績をマージ
             const bStats = battingStats[team.name] || {};
             const pStats = pitchingStats[team.name] || {};
+            const fStats = fieldingStats[team.name] || {};
             team.avg = bStats.avg || '-';
             team.hr = bStats.hr || '-';
             team.sb = bStats.sb || '-';
             team.ops = bStats.ops || '-';
             team.era = pStats.era || '-';
+            team.errors = fStats.errors || '-';
 
             // 重複チェック（交流戦テーブルなどが続く場合があるため）
             if (!teams.some(t => t.name === team.name)) {
@@ -260,7 +262,7 @@ async function handleStandings(league, request, env) {
   }
 
   const year = getYear(request.url);
-  const cacheKey = `standings:v2:${league}:${year}`;
+  const cacheKey = `standings:v3:${league}:${year}`;
   const cached = await getCachedJson(env, cacheKey, request);
   if (cached) return Response.json(cached);
 
@@ -287,12 +289,14 @@ async function handleStandings(league, request, env) {
   const stdUrl = `https://npb.jp/bis/${year}/stats/std_${leagueCode}.html`;
   const tmbUrl = `https://npb.jp/bis/${year}/stats/tmb_${leagueCode}.html`;
   const tmpUrl = `https://npb.jp/bis/${year}/stats/tmp_${leagueCode}.html`;
+  const tmfUrl = `https://npb.jp/bis/${year}/stats/tmf_${leagueCode}.html`;
 
   try {
-    const [stdRes, tmbRes, tmpRes] = await Promise.all([
+    const [stdRes, tmbRes, tmpRes, tmfRes] = await Promise.all([
       fetch(stdUrl, { headers: { 'User-Agent': UA } }),
       fetch(tmbUrl, { headers: { 'User-Agent': UA } }),
       fetch(tmpUrl, { headers: { 'User-Agent': UA } }),
+      fetch(tmfUrl, { headers: { 'User-Agent': UA } }),
     ]);
 
     if (!stdRes.ok) throw new Error(`npb.jp (std) returned ${stdRes.status}`);
@@ -300,9 +304,10 @@ async function handleStandings(league, request, env) {
     const isLegacy = year <= 2024;
 
     // 打撃・投手成績を並列でパース
-    const [battingStats, pitchingStats] = await Promise.all([
+    const [battingStats, pitchingStats, fieldingStats] = await Promise.all([
       parseExtraStats(tmbRes, 'tablefix2', 0, { 1: 'avg', 9: 'hr', 12: 'sb', '-2': 'slg', '-1': 'obp' }, isLegacy),
       parseExtraStats(tmpRes, 'tablefix2', 0, { 1: 'era' }, isLegacy),
+      parseExtraStats(tmfRes, 'tablefix2', 0, { 6: 'errors' }, isLegacy),
     ]);
     Object.values(battingStats).forEach((stats) => {
       stats.ops = calculateOps(stats.slg, stats.obp);
@@ -311,7 +316,12 @@ async function handleStandings(league, request, env) {
     const stdHtml = await stdRes.text();
     const updateNote = await buildStandingsUpdateNote(year, request, env);
     const teams = [];
-    await buildStandingsRewriter(teams, battingStats, pitchingStats).transform(new Response(stdHtml)).text();
+    await buildStandingsRewriter(
+      teams,
+      battingStats,
+      pitchingStats,
+      fieldingStats,
+    ).transform(new Response(stdHtml)).text();
 
     const data = { league, year, teams };
     if (updateNote) data.updateNote = updateNote;
@@ -371,6 +381,7 @@ function buildSpecialStandingsRewriter(teams) {
             hr: '-',
             sb: '-',
             ops: '-',
+            errors: '-',
           });
         });
       },

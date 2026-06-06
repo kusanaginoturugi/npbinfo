@@ -68,10 +68,16 @@
   月変更などで候補外になった場合だけ当日または最初の開催日へ補正する。
 - 日付選択修正を Cloudflare Workers Version
   `47e58bf0-7044-4a0a-904c-d2b8a1c29626` としてデプロイした。
+- 順位表APIへNPB公式チーム守備成績の失策数を追加した。
+- 順位表グラフの打率を失策へ置き換え、棒グラフは少ない順、レーダーは
+  「守備安定」として失策が少ないほど高評価にした。
+- メイン Worker `af89be86-a135-4f92-933a-318f808a3cca` と OGP Worker
+  `eeb64fea-c739-4d24-a809-23289c1b5436` をデプロイした。
+- 本番APIでセ・パ12球団の失策数を確認し、失策グラフ入りOGPを3リーグ分再生成した。
 
 ### Handoff
 
 - `.gemini/` はローカルエージェント設定として `.gitignore` 対象。
 - `npm run build` は成功。
 - `npx eslint .` は既存の `react-hooks/set-state-in-effect`、Worker の `HTMLRewriter` global、未使用変数などで失敗する状態。今回追加した build 定数の `no-undef` は `eslint.config.js` で解消済み。
-- 最終 deploy 済み。Cloudflare Workers Version ID: `47e58bf0-7044-4a0a-904c-d2b8a1c29626`。
+- 最終 deploy 済み。Cloudflare Workers Version ID: `af89be86-a135-4f92-933a-318f808a3cca`。
