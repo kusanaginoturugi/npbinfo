@@ -100,7 +100,7 @@ function getScheduleTtl(year, month) {
   const currentMonth = now.getMonth() + 1;
 
   if (year < currentYear || (year === currentYear && month < currentMonth)) return null;
-  if (year === currentYear && month === currentMonth) return 300;
+  if (year === currentYear && month === currentMonth) return 60;
   return 86400;
 }
 
@@ -1594,6 +1594,68 @@ function getGameStatus(game) {
   return '試合前';
 }
 
+const KOSHIEN_URL = 'https://koshien.hanshin.co.jp/';
+
+async function fetchKoshienCancellation() {
+  const res = await fetch(KOSHIEN_URL, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Accept-Language': 'ja,en;q=0.9',
+    },
+  });
+  if (!res.ok) throw new Error(`koshien.hanshin.co.jp returned ${res.status}`);
+
+  const notice = { title: '', date: '', text: '' };
+  let currentField = null;
+  function collect(field) {
+    return {
+      element(el) {
+        currentField = field;
+        el.onEndTag(() => {
+          notice[field] = normalizeText(notice[field]);
+          currentField = null;
+        });
+      },
+      text(chunk) {
+        if (currentField === field) notice[field] += chunk.text;
+      },
+    };
+  }
+
+  await new HTMLRewriter()
+    .on('dl.info-notice dt', collect('title'))
+    .on('dl.info-notice span.date', collect('date'))
+    .on('dl.info-notice span.text', collect('text'))
+    .transform(res)
+    .text();
+
+  const dateMatch = notice.date.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+  if (!notice.title.includes('試合中止') || !dateMatch || !notice.text.includes('中止')) {
+    return null;
+  }
+  return {
+    date: `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`,
+    text: notice.text,
+    sourceUrl: KOSHIEN_URL,
+  };
+}
+
+function applyKoshienCancellation(games, cancellation) {
+  if (!cancellation) return;
+  for (const game of games) {
+    const isTarget = game.date === cancellation.date
+      && game.homeTeam.includes('阪神')
+      && game.stadium.replace(/\s+/g, '').includes('甲子園')
+      && cancellation.text.includes(game.awayTeam);
+    if (!isTarget || game.status === '終了') continue;
+
+    game.status = '中止';
+    game.comment = cancellation.text;
+    game.statusSource = '甲子園公式';
+    game.statusSourceUrl = cancellation.sourceUrl;
+  }
+}
+
 async function handleSchedule(monthParam, request, env) {
   const match = monthParam?.match(/^(\d{4})-(\d{2})$/);
   if (!match) {
@@ -1607,7 +1669,7 @@ async function handleSchedule(monthParam, request, env) {
     return new Response('Not Found', { status: 404 });
   }
 
-  const cacheKey = `schedule:${year}-${month}`;
+  const cacheKey = `schedule:v2:${year}-${month}`;
   const cached = await getCachedJson(env, cacheKey, request);
   if (cached) return Response.json(cached);
 
@@ -1623,6 +1685,12 @@ async function handleSchedule(monthParam, request, env) {
     if (!res.ok) throw new Error(`npb.jp returned ${res.status} for URL: ${url}`);
 
     const games = [];
+    const koshienCancellationPromise = monthParam === getTokyoDateValue().slice(0, 7)
+      ? fetchKoshienCancellation().catch((err) => {
+        console.warn(`Koshien cancellation fetch failed: ${err.message}`);
+        return null;
+      })
+      : Promise.resolve(null);
     let currentGame = null;
     let currentField = null;
 
@@ -1695,6 +1763,7 @@ async function handleSchedule(monthParam, request, env) {
       .transform(res)
       .text();
 
+    applyKoshienCancellation(games, await koshienCancellationPromise);
     const data = { year, month, games };
     await putCachedJson(env, cacheKey, data, getScheduleTtl(year, monthNumber), request);
     return Response.json(data);

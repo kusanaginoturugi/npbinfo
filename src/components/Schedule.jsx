@@ -33,7 +33,7 @@ function getScheduleTtl(monthValue) {
     return 7 * 24 * 60 * 60 * 1000;
   }
   if (year === currentYear && month === currentMonth) {
-    return 5 * 60 * 1000;
+    return 60 * 1000;
   }
   return 24 * 60 * 60 * 1000;
 }
@@ -286,6 +286,11 @@ function ScheduleCard({ game, weatherState, headToHeadRecord, homeRecent, awayRe
             試合詳細
           </a>
         )}
+        {game.statusSourceUrl && (
+          <a href={game.statusSourceUrl} target="_blank" rel="noreferrer">
+            {game.statusSource || '中止情報'}
+          </a>
+        )}
       </div>
       {game.comment && <div className="schedule-comment">{game.comment}</div>}
     </article>
@@ -305,7 +310,7 @@ export default function Schedule({ initialMonth = CURRENT_MONTH, onMonthChange, 
   const [recentCache, setRecentCache] = useState({});
   const debugMode = isDebugMode();
 
-  const cacheKey = `schedule:${month}`;
+  const cacheKey = `schedule:v2:${month}`;
   const schedule = cache[cacheKey];
   const games = schedule?.games ?? [];
 
