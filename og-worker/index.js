@@ -310,6 +310,32 @@ async function generateAll(env, { force = false } = {}) {
   }
 }
 
+async function updateStatsAndGenerate(env, options) {
+  const year = new Date().toLocaleDateString('en-CA', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+  });
+  const standings = await Promise.all(['cl', 'pl'].map(async league => {
+    const response = await env.NPBINFO.fetch(
+      `https://npbinfo/api/standings/${league}?year=${year}&nocache=1`,
+    );
+    if (!response.ok) throw new Error(`standings cutoff: ${response.status}`);
+    return response.json();
+  }));
+  const cutoffs = standings
+    .map(data => data.updateNote?.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/)?.slice(1))
+    .filter(Boolean)
+    .map(([y, m, d]) => `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`);
+  const cutoff = cutoffs.sort()[0];
+  const response = await env.STATS.fetch('https://stats/internal/refresh', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cutoff }),
+  });
+  if (!response.ok) throw new Error(`stats refresh: ${response.status}`);
+  return generateAll(env, options);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -343,6 +369,6 @@ export default {
 
   async scheduled(controller, env, ctx) {
     const force = controller.cron === '30 18 * * *';
-    ctx.waitUntil(generateAll(env, { force }));
+    ctx.waitUntil(updateStatsAndGenerate(env, { force }));
   },
 };

@@ -3,7 +3,7 @@ import { getTeamInfo } from '../../data/teams';
 const METRICS = [
   { key: 'pct', label: '勝率', getValue: (team) => team.pct },
   { key: 'ops', label: 'OPS', getValue: (team) => team.ops },
-  { key: 'hr', label: '本塁打', getValue: (team) => team.hr },
+  { key: 'hrAdjusted', label: '本塁打(補正)', getValue: (team) => team.hrAdjusted },
   { key: 'sb', label: '盗塁', getValue: (team) => team.sb },
   { key: 'era', label: '防御率(反転)', getValue: (team) => team.era, lowerBetter: true },
   { key: 'errors', label: '守備安定', getValue: (team) => team.errors, lowerBetter: true },
@@ -56,7 +56,7 @@ function buildSeries(teams) {
       name: team.name,
       pct: parseNumber(team.pct),
       ops: parseNumber(team.ops),
-      hr: parseNumber(team.hr),
+      hrAdjusted: parseNumber(team.hrAdjusted),
       sb: parseNumber(team.sb),
       era: parseNumber(team.era),
       errors: parseNumber(team.errors),

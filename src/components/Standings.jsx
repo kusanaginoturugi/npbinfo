@@ -112,7 +112,17 @@ function StandingsTable({ data, isFavorite, toggleFavorite, onSelectTeam }) {
                 <td>{row.avg ?? '-'}</td>
                 <td>{row.ops ?? '-'}</td>
                 <td>{row.era ?? '-'}</td>
-                <td>{row.hr ?? '-'}</td>
+                <td>
+                  {row.hr ?? '-'}
+                  {row.hrAdjusted !== undefined && row.hrAdjusted !== '-' && (
+                    <span
+                      className="park-adjusted-value"
+                      title="球場ごとの本塁打傾向で中立球場換算した推定値"
+                    >
+                      （補正 {Number(row.hrAdjusted).toFixed(1)}）
+                    </span>
+                  )}
+                </td>
                 <td>{row.sb ?? '-'}</td>
               </tr>
             );
@@ -128,6 +138,7 @@ export default function Standings({
   initialYear = new Date().getFullYear(),
   onRouteChange,
   onSelectTeam,
+  onOpenParkFactorMethod,
 }) {
   const [activeLeague, setActiveLeague] = useState(initialLeague);
   const [viewMode, setViewMode] = useState('table');
@@ -139,7 +150,7 @@ export default function Standings({
   const { isFavorite, toggleFavorite } = useFavorites();
   const debugMode = isDebugMode();
 
-  const cacheKey = `standings:v3:${activeLeague}:${year}`;
+  const cacheKey = `standings:v4:${activeLeague}:${year}`;
   const shouldUseLocalCache = !debugMode && activeLeague !== 'cp';
 
   const handleRefresh = () => {
@@ -194,6 +205,11 @@ export default function Standings({
     const entry = data[cacheKey];
     if (!entry || Array.isArray(entry)) return '';
     return entry.updateNote ?? '';
+  }, [cacheKey, data]);
+  const hrAdjustment = useMemo(() => {
+    const entry = data[cacheKey];
+    if (!entry || Array.isArray(entry)) return null;
+    return entry.hrAdjustment ?? null;
   }, [cacheKey, data]);
   const graphAvailable = activeLeague === 'cl' || activeLeague === 'pl';
 
@@ -295,6 +311,24 @@ export default function Standings({
                 <StandingsBars teams={standingsRows} />
               </div>
             </Suspense>
+          )}
+          {hrAdjustment && (
+            <p className="standings-method-note">
+              本塁打の補正値とグラフは、{hrAdjustment.years[0]}〜
+              {hrAdjustment.years.at(-1)}年の球場別本塁打傾向を
+              平均へ回帰させ、各試合を中立球場換算した推定値です。
+              {hrAdjustment.factorOverrides?.['バンテリンドーム ナゴヤ'] && (
+                <> 2026年のバンテリンドームはホームランテラス新設のため補正対象外です。</>
+              )}
+              {' '}
+              <button
+                type="button"
+                className="methodology-link"
+                onClick={onOpenParkFactorMethod}
+              >
+                計算方法
+              </button>
+            </p>
           )}
           {lastUpdated[cacheKey] && (
             <div style={{ marginTop: '12px', fontSize: '11px', color: 'var(--color-footer)', textAlign: 'right' }}>

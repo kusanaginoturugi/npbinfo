@@ -1,0 +1,18 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "npbinfo-stats-updater",
+  "main": "index.js",
+  "compatibility_date": "2026-04-15",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      "id": "380a38d6849144f28fb6571b7b775c47"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

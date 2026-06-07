@@ -9,7 +9,10 @@
     "preview": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy",
     "deploy:og": "wrangler deploy --config og-worker/wrangler.jsonc",
-    "dev:og": "wrangler dev --config og-worker/wrangler.jsonc --test-scheduled"
+    "dev:og": "wrangler dev --config og-worker/wrangler.jsonc --test-scheduled",
+    "build:park-factors": "node scripts/build-hr-park-factors.mjs",
+    "deploy:stats": "wrangler deploy --config stats-worker/wrangler.jsonc",
+    "dev:stats": "wrangler dev --config stats-worker/wrangler.jsonc --test-scheduled"
   },
   "dependencies": {
     "concurrently": "^9.2.1",

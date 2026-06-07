@@ -13,6 +13,10 @@
     {
       "binding": "NPBINFO",
       "service": "npbinfo"
+    },
+    {
+      "binding": "STATS",
+      "service": "npbinfo-stats-updater"
     }
   ],
   "kv_namespaces": [

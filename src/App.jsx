@@ -4,10 +4,12 @@ import PlayerStats from './components/PlayerStats';
 import Schedule from './components/Schedule';
 import Stadiums from './components/Stadiums';
 import TeamTimeline from './components/TeamTimeline';
+import HomeRunParkFactorMethod from './components/HomeRunParkFactorMethod';
 import { getBuildInfo, isDebugMode, syncDebugFromUrl, withNoCache } from './utils/debug';
 import {
   defaultRoute,
   parseRoute,
+  parkFactorMethodPath,
   schedulePath,
   stadiumPath,
   standingsPath,
@@ -179,6 +181,11 @@ export default function App() {
             initialLeague={route.league}
             initialYear={route.year}
             onSelectTeam={openTeam}
+            onOpenParkFactorMethod={() => navigate({
+              tab: 'methodology',
+              method: 'home-run-park-factor',
+              path: parkFactorMethodPath(),
+            })}
             onRouteChange={(league, year) => navigate({
               tab: 'standings',
               league,
@@ -223,6 +230,11 @@ export default function App() {
         )}
         {route.tab === 'team' && route.team === 'hanshin' && (
           <TeamTimeline key={`${route.path}-${dark ? 'dark' : 'light'}`} dark={dark} />
+        )}
+        {route.tab === 'methodology' && route.method === 'home-run-park-factor' && (
+          <HomeRunParkFactorMethod
+            onBack={() => navigate(defaultRoute('standings'))}
+          />
         )}
       </main>
 

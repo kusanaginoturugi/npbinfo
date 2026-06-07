@@ -6,6 +6,10 @@
 // - /api/headtohead/:league   → チーム間対戦成績スクレイピング
 // - /og/standings/:league     → 順位表 OGP SVG
 // - その他                    → dist/ の静的アセットを返す
+import {
+  HR_PARK_FACTORS,
+  HR_PARK_FACTOR_META,
+} from '../src/data/hrParkFactors.generated.js';
 
 const BUILD_INFO = {
   buildId: __NPBINFO_BUILD_ID__,
@@ -256,13 +260,41 @@ function buildStandingsRewriter(teams, battingStats, pitchingStats, fieldingStat
     });
 }
 
+async function mergeAdjustedHomeRuns(teams, year, env) {
+  if (!env.CACHE) return null;
+
+  try {
+    const adjustment = await env.CACHE.get(`hr-adjusted:${year}`, 'json');
+    if (!adjustment?.teams) return null;
+
+    teams.forEach(team => {
+      const adjusted = adjustment.teams[team.name];
+      const standingsHomeRuns = Number.parseInt(team.hr, 10);
+      team.hrAdjusted = adjusted?.raw === standingsHomeRuns
+        ? adjusted.adjusted
+        : '-';
+    });
+    return {
+      generatedAt: adjustment.generatedAt,
+      cutoff: adjustment.cutoff,
+      pending: adjustment.pending ?? 0,
+      years: HR_PARK_FACTOR_META.years,
+      regressionGames: HR_PARK_FACTOR_META.regressionGames,
+      factorOverrides: adjustment.factorOverrides ?? {},
+    };
+  } catch (err) {
+    console.warn(`KV get failed for hr-adjusted:${year}: ${err.message}`);
+    return null;
+  }
+}
+
 async function handleStandings(league, request, env) {
   if (!VALID_LEAGUES.has(league)) {
     return new Response('Not Found', { status: 404 });
   }
 
   const year = getYear(request.url);
-  const cacheKey = `standings:v3:${league}:${year}`;
+  const cacheKey = `standings:v4:${league}:${year}`;
   const cached = await getCachedJson(env, cacheKey, request);
   if (cached) return Response.json(cached);
 
@@ -322,9 +354,11 @@ async function handleStandings(league, request, env) {
       pitchingStats,
       fieldingStats,
     ).transform(new Response(stdHtml)).text();
+    const hrAdjustment = await mergeAdjustedHomeRuns(teams, year, env);
 
     const data = { league, year, teams };
     if (updateNote) data.updateNote = updateNote;
+    if (hrAdjustment) data.hrAdjustment = hrAdjustment;
     await putCachedJson(env, cacheKey, data, getYearAwareTtl(year, 600), request);
     return Response.json(data);
   } catch (err) {
@@ -1851,6 +1885,14 @@ export default {
       return jsonNoStore({
         ...BUILD_INFO,
         now: new Date().toISOString(),
+      });
+    }
+
+    // /api/park-factors/hr
+    if (segments[0] === 'api' && segments[1] === 'park-factors' && segments[2] === 'hr') {
+      return Response.json({
+        meta: HR_PARK_FACTOR_META,
+        parks: HR_PARK_FACTORS,
       });
     }
 

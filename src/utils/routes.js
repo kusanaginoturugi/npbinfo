@@ -53,6 +53,10 @@ export function teamPath(teamSlug) {
   return `/teams/${teamSlug}`;
 }
 
+export function parkFactorMethodPath() {
+  return '/methodology/home-run-park-factor';
+}
+
 export function defaultRoute(tab = 'standings') {
   const year = new Date().getFullYear();
 
@@ -131,6 +135,18 @@ export function parseRoute(pathname) {
       tab: 'team',
       team: 'hanshin',
       path: teamPath('hanshin'),
+    };
+  }
+
+  if (
+    segments[0] === 'methodology'
+    && segments[1] === 'home-run-park-factor'
+    && segments.length === 2
+  ) {
+    return {
+      tab: 'methodology',
+      method: 'home-run-park-factor',
+      path: parkFactorMethodPath(),
     };
   }
 

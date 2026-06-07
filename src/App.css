@@ -649,6 +649,78 @@ body {
   font-size: 12px;
 }
 
+.park-adjusted-value {
+  display: block;
+  color: var(--color-footer);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.standings-method-note {
+  margin: 10px 0 0;
+  color: var(--color-footer);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.methodology-link,
+.methodology-back {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--color-tab-active);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.methodology-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.methodology-heading .section-title {
+  flex: 1;
+}
+
+.methodology-page {
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.methodology-page h3 {
+  margin: 24px 0 6px;
+  color: var(--color-heading);
+  font-size: 15px;
+}
+
+.methodology-page ul,
+.methodology-page ol {
+  margin: 6px 0;
+  padding-left: 24px;
+}
+
+.methodology-lead {
+  font-weight: 700;
+}
+
+.methodology-formula {
+  margin: 16px 0;
+  overflow-x: auto;
+  border-left: 3px solid var(--color-tab-active);
+  padding: 10px 14px;
+  background: var(--bg-row-even);
+  font-variant-numeric: tabular-nums;
+}
+
+.methodology-sources a {
+  color: var(--color-tab-active);
+}
+
 /* ─── Schedule ─────────────────────────────────────────────── */
 .schedule-list {
   display: grid;
