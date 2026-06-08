@@ -6,7 +6,7 @@ const METRICS = [
   { key: 'hrAdjusted', label: '本塁打(補正)', getValue: (team) => team.hrAdjusted },
   { key: 'sb', label: '盗塁', getValue: (team) => team.sb },
   { key: 'era', label: '防御率(反転)', getValue: (team) => team.era, lowerBetter: true },
-  { key: 'errors', label: '守備安定', getValue: (team) => team.errors, lowerBetter: true },
+  { key: 'derApprox', label: 'DER近似', getValue: (team) => team.derApprox },
 ];
 
 function parseNumber(value) {
@@ -59,7 +59,7 @@ function buildSeries(teams) {
       hrAdjusted: parseNumber(team.hrAdjusted),
       sb: parseNumber(team.sb),
       era: parseNumber(team.era),
-      errors: parseNumber(team.errors),
+      derApprox: parseNumber(team.derApprox),
     }))
     .filter(team => METRICS.every(metric => metric.getValue(team) !== null));
 
@@ -152,7 +152,7 @@ export default function StandingsRadar({ teams }) {
           </span>
         ))}
       </div>
-      <p className="chart-note">各指標はリーグ内の最小値を0、最大値を100にした相対スケールで表示。防御率と守備安定（失策数）は少ないほど高評価。</p>
+      <p className="chart-note">各指標はリーグ内の最小値を0、最大値を100にした相対スケールで表示。防御率は少ないほど高評価。DER近似は本塁打以外のインプレー被安打率から算出。</p>
     </div>
   );
 }

@@ -151,7 +151,7 @@ export default function Standings({
   const { isFavorite, toggleFavorite } = useFavorites();
   const debugMode = isDebugMode();
 
-  const cacheKey = `standings:v4:${activeLeague}:${year}`;
+  const cacheKey = `standings:v5:${activeLeague}:${year}`;
   const shouldUseLocalCache = !debugMode && activeLeague !== 'cp';
 
   const handleRefresh = () => {
@@ -264,23 +264,23 @@ export default function Standings({
             setYear(nextYear);
             onRouteChange?.(activeLeague, nextYear);
           }}
-          className="year-select"
+          className="control-select"
         >
           {years.map(y => (
             <option key={y} value={y}>{y}年</option>
           ))}
         </select>
-        <div className="tab-bar standings-mode-switch">
+        <div className="segmented-control standings-mode-switch">
           <button
             type="button"
-            className={`tab-btn ${viewMode === 'table' ? 'active' : ''}`}
+            className={`segmented-control-btn ${viewMode === 'table' ? 'active' : ''}`}
             onClick={() => setViewMode('table')}
           >
             表
           </button>
           <button
             type="button"
-            className={`tab-btn ${viewMode === 'charts' ? 'active' : ''}`}
+            className={`segmented-control-btn ${viewMode === 'charts' ? 'active' : ''}`}
             onClick={() => setViewMode('charts')}
             disabled={!graphAvailable}
             title={graphAvailable ? 'グラフ表示' : 'グラフはセ/パリーグのみ'}
@@ -290,7 +290,7 @@ export default function Standings({
         </div>
         <button
           type="button"
-          className="share-x-btn"
+          className="control-button share-x-btn"
           onClick={handleShareToX}
           disabled={!data[cacheKey]}
           title="Xで順位表を共有"
@@ -300,7 +300,7 @@ export default function Standings({
         {debugMode && (
           <button
             type="button"
-            className="year-select"
+            className="control-button"
             onClick={handleRefresh}
             disabled={loading}
             title="キャッシュを無視して再取得 (debug)"

@@ -292,7 +292,8 @@ body {
   background: var(--bg-tab-active);
 }
 
-.year-select {
+.control-select,
+.control-input {
   padding: 6px 32px 6px 12px;
   border-radius: 6px;
   border: 1.5px solid var(--border-tab);
@@ -309,8 +310,43 @@ body {
   height: 33.5px; /* tab-btn (13px * 1.5 + 6px * 2 + 1.5px * 2 = 34.5px に近づける) */
 }
 
-.year-select:hover { border-color: #666; }
-.year-select:focus { outline: none; border-color: var(--border-tab-active); }
+.control-input {
+  padding-right: 12px;
+  background-image: none;
+  appearance: auto;
+}
+
+.control-button {
+  height: 33.5px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border-tab);
+  background: var(--bg-tab);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.control-select:hover,
+.control-input:hover,
+.control-button:hover { border-color: #666; }
+
+.control-select:focus,
+.control-input:focus,
+.control-button:focus {
+  outline: none;
+  border-color: var(--border-tab-active);
+}
+
+.control-select:disabled,
+.control-input:disabled,
+.control-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
 .controls-row {
   display: flex;
@@ -483,44 +519,42 @@ body {
   margin-bottom: 0;
 }
 
-.standings-mode-switch .tab-btn {
+.segmented-control {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.segmented-control-btn {
   height: 33.5px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 6px 14px;
-  line-height: 1.5;
-}
-
-.standings-mode-switch .tab-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.share-x-btn {
-  height: 33.5px;
-  padding: 6px 14px;
-  border-radius: 6px;
   border: 1.5px solid var(--border-tab);
+  border-radius: 20px;
   background: var(--bg-tab);
-  color: var(--color-text);
+  color: var(--color-tab);
   font-family: inherit;
   font-size: 13px;
-  font-weight: 600;
   line-height: 1.5;
   cursor: pointer;
+  transition: all 0.15s;
 }
 
-.share-x-btn:hover {
+.segmented-control-btn:hover {
   border-color: #666;
+  color: var(--color-text);
 }
 
-.share-x-btn:focus {
-  outline: none;
+.segmented-control-btn.active {
   border-color: var(--border-tab-active);
+  background: var(--bg-tab-active);
+  color: var(--color-tab-active);
+  font-weight: 600;
 }
 
-.share-x-btn:disabled {
+.segmented-control-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }

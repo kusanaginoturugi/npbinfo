@@ -246,7 +246,25 @@ async function collectTableRows(source, {
     .text();
 }
 
-async function collectStandingsTeams(source, teams, battingStats, pitchingStats, fieldingStats) {
+function calculateApproxDer(stats) {
+  const battersFaced = Number.parseFloat(stats.battersFaced);
+  const hitsAllowed = Number.parseFloat(stats.hitsAllowed);
+  const homeRunsAllowed = Number.parseFloat(stats.homeRunsAllowed);
+  const walks = Number.parseFloat(stats.walks);
+  const hitBatters = Number.parseFloat(stats.hitBatters);
+  const strikeouts = Number.parseFloat(stats.strikeouts);
+  if (![battersFaced, hitsAllowed, homeRunsAllowed, walks, hitBatters, strikeouts].every(Number.isFinite)) {
+    return '-';
+  }
+
+  const ballsInPlay = battersFaced - walks - hitBatters - strikeouts - homeRunsAllowed;
+  if (ballsInPlay <= 0) return '-';
+
+  const nonHomeRunHits = hitsAllowed - homeRunsAllowed;
+  return formatRate(1 - (nonHomeRunHits / ballsInPlay));
+}
+
+async function collectStandingsTeams(source, teams, battingStats, pitchingStats) {
   await collectTableRows(source, {
     tableClassNames: ['tablefix2', 'stdtblSubmain'],
     normalizeCell: value => String(value ?? '').replace(/\s+/g, ' ').trim(),
@@ -264,13 +282,12 @@ async function collectStandingsTeams(source, teams, battingStats, pitchingStats,
       // 追加成績をマージ
       const bStats = battingStats[team.name] || {};
       const pStats = pitchingStats[team.name] || {};
-      const fStats = fieldingStats[team.name] || {};
       team.avg = bStats.avg || '-';
       team.hr = bStats.hr || '-';
       team.sb = bStats.sb || '-';
       team.ops = bStats.ops || '-';
       team.era = pStats.era || '-';
-      team.errors = fStats.errors || '-';
+      team.derApprox = calculateApproxDer(pStats);
 
       // 重複チェック（交流戦テーブルなどが続く場合があるため）
       if (!teams.some(t => t.name === team.name)) {
@@ -314,7 +331,7 @@ async function handleStandings(league, request, env) {
   }
 
   const year = getYear(request.url);
-  const cacheKey = `standings:v4:${league}:${year}`;
+  const cacheKey = `standings:v5:${league}:${year}`;
   const cached = await getCachedJson(env, cacheKey, request);
   if (cached) return Response.json(cached);
 
@@ -341,14 +358,12 @@ async function handleStandings(league, request, env) {
   const stdUrl = `https://npb.jp/bis/${year}/stats/std_${leagueCode}.html`;
   const tmbUrl = `https://npb.jp/bis/${year}/stats/tmb_${leagueCode}.html`;
   const tmpUrl = `https://npb.jp/bis/${year}/stats/tmp_${leagueCode}.html`;
-  const tmfUrl = `https://npb.jp/bis/${year}/stats/tmf_${leagueCode}.html`;
 
   try {
-    const [stdRes, tmbRes, tmpRes, tmfRes] = await Promise.all([
+    const [stdRes, tmbRes, tmpRes] = await Promise.all([
       fetch(stdUrl, { headers: { 'User-Agent': UA } }),
       fetch(tmbUrl, { headers: { 'User-Agent': UA } }),
       fetch(tmpUrl, { headers: { 'User-Agent': UA } }),
-      fetch(tmfUrl, { headers: { 'User-Agent': UA } }),
     ]);
 
     if (!stdRes.ok) throw new Error(`npb.jp (std) returned ${stdRes.status}`);
@@ -356,10 +371,17 @@ async function handleStandings(league, request, env) {
     const isLegacy = year <= 2024;
 
     // 打撃・投手成績を並列でパース
-    const [battingStats, pitchingStats, fieldingStats] = await Promise.all([
+    const [battingStats, pitchingStats] = await Promise.all([
       parseExtraStats(tmbRes, 'tablefix2', 0, { 1: 'avg', 9: 'hr', 12: 'sb', '-2': 'slg', '-1': 'obp' }, isLegacy),
-      parseExtraStats(tmpRes, 'tablefix2', 0, { 1: 'era' }, isLegacy),
-      parseExtraStats(tmfRes, 'tablefix2', 0, { 6: 'errors' }, isLegacy),
+      parseExtraStats(tmpRes, 'tablefix2', 0, {
+        1: 'era',
+        12: 'battersFaced',
+        14: 'hitsAllowed',
+        15: 'homeRunsAllowed',
+        16: 'walks',
+        18: 'hitBatters',
+        19: 'strikeouts',
+      }, isLegacy),
     ]);
     Object.values(battingStats).forEach((stats) => {
       stats.ops = calculateOps(stats.slg, stats.obp);
@@ -373,7 +395,6 @@ async function handleStandings(league, request, env) {
       teams,
       battingStats,
       pitchingStats,
-      fieldingStats,
     );
     const hrAdjustment = await mergeAdjustedHomeRuns(teams, year, env);
 
@@ -434,7 +455,7 @@ function buildSpecialStandingsRewriter(teams) {
             hr: '-',
             sb: '-',
             ops: '-',
-            errors: '-',
+            derApprox: '-',
           });
         });
       },

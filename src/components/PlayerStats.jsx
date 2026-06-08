@@ -299,7 +299,7 @@ export default function PlayerStats({
             setYear(nextYear);
             onRouteChange?.(type, league, nextYear);
           }}
-          className="year-select"
+          className="control-select"
         >
           {years.map(y => (
             <option key={y} value={y}>{y}年</option>
@@ -317,7 +317,7 @@ export default function PlayerStats({
         {debugMode && (
           <button
             type="button"
-            className="year-select"
+            className="control-button"
             onClick={handleRefresh}
             disabled={loading}
             title="キャッシュを無視して再取得 (debug)"
@@ -333,7 +333,7 @@ export default function PlayerStats({
           value={playerNameFilter}
           onChange={(e) => setPlayerNameFilter(e.target.value)}
           placeholder="選手名で絞り込み"
-          className="year-select"
+          className="control-input"
           style={{ minWidth: '180px' }}
         />
         <div className="tab-bar" style={{ marginBottom: 0 }}>

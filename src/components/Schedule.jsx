@@ -517,12 +517,12 @@ export default function Schedule({ initialMonth = CURRENT_MONTH, onMonthChange, 
             setMonth(e.target.value);
             onMonthChange?.(e.target.value);
           }}
-          className="year-select"
+          className="control-input"
         />
         <select
           value={selectedDate}
           onChange={(e) => setSelectedDate(e.target.value)}
-          className="year-select"
+          className="control-select"
           disabled={!availableDates.length}
         >
           {availableDates.map(date => (
@@ -532,7 +532,7 @@ export default function Schedule({ initialMonth = CURRENT_MONTH, onMonthChange, 
         {debugMode && (
           <button
             type="button"
-            className="year-select"
+            className="control-button"
             onClick={handleRefresh}
             disabled={loading}
             title="キャッシュを無視して再取得 (debug)"

@@ -6,7 +6,7 @@ const METRICS = [
   { key: 'hrAdjusted', label: '本塁打（補正）', parse: (v) => Number.parseFloat(v), higherBetter: true, format: (v) => Number(v).toFixed(1) },
   { key: 'sb', label: '盗塁', parse: (v) => Number.parseInt(v, 10), higherBetter: true, format: (v) => String(v) },
   { key: 'era', label: '防御率', parse: (v) => Number.parseFloat(v), higherBetter: false, format: (v) => Number(v).toFixed(2) },
-  { key: 'errors', label: '失策', parse: (v) => Number.parseInt(v, 10), higherBetter: false, format: (v) => String(v) },
+  { key: 'derApprox', label: 'DER近似', parse: (v) => Number.parseFloat(v), higherBetter: true, format: (v) => Number(v).toFixed(3) },
 ];
 
 function buildRows(teams, metric) {
