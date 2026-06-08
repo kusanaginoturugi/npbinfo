@@ -1,29 +1,4 @@
-const TEAM_ALIASES = {
-  阪神タイガース: '阪神',
-  阪神: '阪神',
-  東京ヤクルトスワローズ: 'ヤクルト',
-  ヤクルト: 'ヤクルト',
-  読売ジャイアンツ: '巨人',
-  巨人: '巨人',
-  横浜DeNAベイスターズ: 'DeNA',
-  DeNA: 'DeNA',
-  広島東洋カープ: '広島',
-  広島: '広島',
-  中日ドラゴンズ: '中日',
-  中日: '中日',
-  埼玉西武ライオンズ: '西武',
-  西武: '西武',
-  オリックス・バファローズ: 'オリックス',
-  オリックス: 'オリックス',
-  福岡ソフトバンクホークス: 'ソフトバンク',
-  ソフトバンク: 'ソフトバンク',
-  北海道日本ハムファイターズ: '日本ハム',
-  日本ハム: '日本ハム',
-  千葉ロッテマリーンズ: 'ロッテ',
-  ロッテ: 'ロッテ',
-  東北楽天ゴールデンイーグルス: '楽天',
-  楽天: '楽天',
-};
+import { normalizeTeamName } from './teams.js';
 
 const VENUE_ALIASES = [
   [/エスコン/, 'エスコンフィールドHOKKAIDO'],
@@ -52,7 +27,7 @@ function stripHtml(value) {
 
 export function normalizeParkFactorTeam(value) {
   const normalized = stripHtml(value).replace(/[【】]/g, '');
-  return TEAM_ALIASES[normalized] ?? normalized;
+  return normalizeTeamName(normalized);
 }
 
 export function normalizeParkFactorVenue(value) {

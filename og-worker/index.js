@@ -1,25 +1,11 @@
 import puppeteer from '@cloudflare/puppeteer';
+import { getTeamPrimaryColor } from '../shared/teams.js';
 
 const LEAGUES = ['cl', 'pl', 'cp'];
 const LEAGUE_LABELS = {
   cl: 'セントラル・リーグ',
   pl: 'パシフィック・リーグ',
   cp: 'セ・パ交流戦',
-};
-const TEAM_COLORS = {
-  ヤクルト: '#001943',
-  阪神: '#ffe600',
-  巨人: '#f49c00',
-  DeNA: '#003f8e',
-  横浜DeNA: '#003f8e',
-  広島: '#cc0000',
-  中日: '#0035ad',
-  ソフトバンク: '#f3c945',
-  日本ハム: '#005496',
-  楽天: '#870011',
-  ロッテ: '#111111',
-  オリックス: '#000019',
-  西武: '#1f2d53',
 };
 
 function escapeHtml(value) {
@@ -32,8 +18,7 @@ function escapeHtml(value) {
 }
 
 function teamColor(name) {
-  return Object.entries(TEAM_COLORS)
-    .find(([key]) => String(name ?? '').includes(key))?.[1] ?? '#64748b';
+  return getTeamPrimaryColor(name, '#64748b');
 }
 
 function metricValue(team, key) {

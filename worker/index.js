@@ -10,6 +10,12 @@ import {
   HR_PARK_FACTORS,
   HR_PARK_FACTOR_META,
 } from '../src/data/hrParkFactors.generated.js';
+import {
+  getTeamOgpCode,
+  getTeamPrimaryColor,
+  normalizeTeamName,
+  normalizeTeamNameByPartialMatch,
+} from '../shared/teams.js';
 
 const BUILD_INFO = {
   buildId: __NPBINFO_BUILD_ID__,
@@ -126,51 +132,6 @@ const LEAGUE_LABELS = {
   pl: 'パ・リーグ',
   cp: '交流戦',
   op: 'オープン戦',
-};
-
-const TEAM_COLORS = {
-  '阪神': '#FFE600',
-  '横浜DeNA': '#003F8E',
-  'DeNA': '#003F8E',
-  '読売': '#F49C00',
-  '巨人': '#F49C00',
-  '広島': '#CC0000',
-  '中日': '#0035AD',
-  'ヤクルト': '#001943',
-  'ソフトバンク': '#F3C945',
-  '日本ハム': '#005496',
-  'オリックス': '#000019',
-  '楽天': '#870011',
-  '西武': '#1F2D53',
-  'ロッテ': '#000000',
-};
-
-const TEAM_SHORT_NAMES = {
-  '神': '阪神',
-  'ヤ': 'ヤクルト',
-  '巨': '巨人',
-  'デ': 'DeNA',
-  '横浜DeNA': 'DeNA',
-  '広': '広島',
-  '中': '中日',
-  '西': '西武',
-  'オ': 'オリックス',
-  'ソ': 'ソフトバンク',
-  '日': '日本ハム',
-  'ロ': 'ロッテ',
-  '楽': '楽天',
-  '阪神タイガース': '阪神',
-  '東京ヤクルトスワローズ': 'ヤクルト',
-  '読売ジャイアンツ': '巨人',
-  '横浜DeNAベイスターズ': 'DeNA',
-  '広島東洋カープ': '広島',
-  '中日ドラゴンズ': '中日',
-  '埼玉西武ライオンズ': '西武',
-  'オリックス・バファローズ': 'オリックス',
-  '福岡ソフトバンクホークス': 'ソフトバンク',
-  '北海道日本ハムファイターズ': '日本ハム',
-  '千葉ロッテマリーンズ': 'ロッテ',
-  '東北楽天ゴールデンイーグルス': '楽天',
 };
 
 const STANDINGS_FIELDS = {
@@ -371,9 +332,7 @@ async function handleStandings(league, request, env) {
 
 function normalizeSpecialStandingsTeamName(value) {
   const normalized = String(value ?? '').replace(/[ \t\r\n　]/g, '');
-  const aliases = Object.keys(TEAM_SHORT_NAMES).sort((a, b) => b.length - a.length);
-  const matched = aliases.find(alias => normalized.includes(alias.replace(/[ \t\r\n　]/g, '')));
-  return matched ? TEAM_SHORT_NAMES[matched] : normalizeTeamShortName(normalized);
+  return normalizeTeamNameByPartialMatch(normalized);
 }
 
 function applyCompetitionRanks(teams) {
@@ -725,7 +684,7 @@ async function buildStandingsUpdateNote(year, request, env) {
 function normalizeTeamShortName(value) {
   // チーム名の正規化（空白・改行を完全に除去してマッチング率を上げる）
   const normalized = value.replace(/[ \t\r\n　]/g, '');
-  return TEAM_SHORT_NAMES[normalized] ?? normalized;
+  return normalizeTeamName(normalized);
 }
 
 async function parseExtraStats(res, tableClass, teamNameIdx, fieldMappings, isLegacy = false) {
@@ -845,7 +804,7 @@ function parseOpponentHeader(value) {
   const normalized = normalizeText(value);
   const match = normalized.match(/^対(.+)$/);
   if (!match) return null;
-  return TEAM_SHORT_NAMES[match[1]] ?? match[1];
+  return normalizeTeamName(match[1]);
 }
 
 async function handleHeadToHead(league, request, env) {
@@ -987,8 +946,7 @@ async function handleHeadToHead(league, request, env) {
 
 // ─── OGP SVG ────────────────────────────────────────────────
 function getTeamColor(teamName) {
-  const normalizedTeamName = String(teamName ?? '');
-  return Object.entries(TEAM_COLORS).find(([name]) => normalizedTeamName.includes(name))?.[1] ?? '#334155';
+  return getTeamPrimaryColor(teamName, '#334155');
 }
 
 function renderStandingsSvg(data, league) {
@@ -1075,28 +1033,14 @@ async function handleStandingsOg(league, request, env) {
 const PNG_WIDTH = 1200;
 const PNG_HEIGHT = 630;
 
+// Browser Rendering で生成した OGP PNG が KV に存在しない場合だけ使う最小フォールバック。
+// SNS クローラ向けに 404/500 ではなく最低限の PNG を返すための保険で、
+// 表現改善や日本語描画の追加は og-worker 側で行う。
 const OGP_LEAGUE_LABELS = {
   cl: 'CENTRAL',
   pl: 'PACIFIC',
   cp: 'INTERLEAGUE',
   op: 'OPEN',
-};
-
-const OGP_TEAM_CODES = {
-  'ヤクルト': 'YS',
-  '阪神': 'T',
-  '巨人': 'G',
-  '読売': 'G',
-  'DeNA': 'DB',
-  '横浜DeNA': 'DB',
-  '広島': 'C',
-  '中日': 'D',
-  '西武': 'L',
-  'ソフトバンク': 'H',
-  'オリックス': 'B',
-  '日本ハム': 'F',
-  'ロッテ': 'M',
-  '楽天': 'E',
 };
 
 const BITMAP_FONT = {
@@ -1315,8 +1259,7 @@ function makePng(canvas) {
 }
 
 function getOgpTeamCode(name) {
-  const teamName = String(name ?? '');
-  return Object.entries(OGP_TEAM_CODES).find(([key]) => teamName.includes(key))?.[1] ?? teamName.slice(0, 3).toUpperCase();
+  return getTeamOgpCode(name);
 }
 
 function renderStandingsPng(data, league) {
