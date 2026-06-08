@@ -3,6 +3,7 @@ import { getContrastColor, getTeamInfo } from '../data/teams';
 import { useFavorites } from '../hooks/useFavorites';
 import { apiCache } from '../utils/apiCache';
 import { isDebugMode, withNoCache } from '../utils/debug';
+import { standingsPath } from '../utils/routes';
 
 const LEAGUES = [
   { key: 'cl', label: 'セントラル・リーグ', color: '#003087' },
@@ -221,6 +222,23 @@ export default function Standings({
     return new Date(ts).toLocaleString('ja-JP');
   };
 
+  const handleShareToX = () => {
+    const shareUrl = new URL(standingsPath(activeLeague, year), window.location.origin).toString();
+    const lines = [
+      `${year}年 ${activeInfo?.label ?? '順位表'} 順位表`,
+      updateNote,
+    ].filter(Boolean);
+    const params = new URLSearchParams({
+      text: lines.join('\n'),
+      url: shareUrl,
+    });
+    window.open(
+      `https://twitter.com/intent/tweet?${params.toString()}`,
+      '_blank',
+      'noopener,noreferrer',
+    );
+  };
+
   return (
     <section className="section">
       <h2 className="section-title">順位表</h2>
@@ -270,6 +288,15 @@ export default function Standings({
             グラフ
           </button>
         </div>
+        <button
+          type="button"
+          className="share-x-btn"
+          onClick={handleShareToX}
+          disabled={!data[cacheKey]}
+          title="Xで順位表を共有"
+        >
+          Xで共有
+        </button>
         {debugMode && (
           <button
             type="button"

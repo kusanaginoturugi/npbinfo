@@ -483,7 +483,44 @@ body {
   margin-bottom: 0;
 }
 
+.standings-mode-switch .tab-btn {
+  height: 33.5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  line-height: 1.5;
+}
+
 .standings-mode-switch .tab-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.share-x-btn {
+  height: 33.5px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border-tab);
+  background: var(--bg-tab);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.share-x-btn:hover {
+  border-color: #666;
+}
+
+.share-x-btn:focus {
+  outline: none;
+  border-color: var(--border-tab-active);
+}
+
+.share-x-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
