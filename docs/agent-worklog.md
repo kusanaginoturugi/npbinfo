@@ -90,6 +90,25 @@
 - 本番へ deploy 済み。Cloudflare Workers Version ID: `88b2276d-e722-463d-8c7c-39e635054aad`。
 - 対象全体の ESLint は既存の `react-hooks/set-state-in-effect` などで失敗。新規の `App.jsx` と `routes.js` は ESLint 成功。
 
+## 2026-06-08
+
+### Plan
+
+- 本番 Worker の build 情報を確認し、Cloudflare 側の反映状態を切り分ける。
+- Git 連携ビルドを再実行するため、空コミットを `main` に push する。
+
+### Work Log
+
+- `/api/debug` で本番の `gitRevision` が `0e672b6` のまま止まっていることを確認した。
+- ローカルと `origin/main` の HEAD は `d13e035` で、本番との差分がある状態を確認した。
+- Cloudflare のプロダクションブランチ設定が `main` ではない可能性を確認した。
+- Cloudflare の Git 連携ビルドを起動するため、空コミットを作成して push する。
+
+### Handoff
+
+- push 後は `curl -s https://npbinfo.kusanaginoturugi.workers.dev/api/debug` で `gitRevision` を確認する。
+- `gitRevision` が `d13e035` または空コミットの短縮 SHA になれば、本番 Worker は更新済み。
+
 ## 2026-06-05
 
 ### Plan
