@@ -67,6 +67,12 @@ npm run build
 npm run preview
 ```
 
+テスト（`node --test`。スクレイピングパーサの単体テスト）:
+
+```sh
+npm test
+```
+
 ## デプロイ
 
 Cloudflare Workers にデプロイする。`wrangler login` 済みであること。

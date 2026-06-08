@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "test": "node --test",
     "dev": "concurrently \"vite\" \"wrangler dev\"",
     "build": "vite build",
     "preview": "npm run build && wrangler dev",

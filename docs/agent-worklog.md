@@ -1,5 +1,29 @@
 # Agent Worklog
 
+## 2026-06-08
+
+### Plan
+
+- 現状コードを評価し、レポートと Issue にまとめる。
+- 気になる点を Issue 化し（#32〜#36）、優先度順に潰す。
+- まず #32（テスト基盤）から着手する。
+
+### Work Log
+
+- コードレビュー結果を `docs/code-review-2026-06-08.md` に出力した。
+- 気になる点 5 件を Issue 化（#32 テスト / #33 worker分割 / #34 HTMLRewriter共通化 /
+  #35 チーム名マスタ統合 / #36 自前PNGの要否）。
+- #32 着手: `node --test` でスクレイピングパーサの単体テストを追加。
+  - `shared/hrParkFactor.js` の純粋関数 4 つ（チーム名正規化・球場名正規化・
+    試合詳細パース・本塁打中立換算）を対象にした。
+  - `parseNpbGameDetail` は npb.jp の実 HTML（2024/05/01 巨人対ヤクルト）を
+    `test/fixtures/` に固定し、HTML 構造変更を検知できるようにした。
+  - `package.json` に `test` スクリプト、`.github/workflows/ci.yml` に push/PR の CI を追加。
+
+### Verification
+
+- `npm test` で 7 テストすべて緑（pass 7 / fail 0）。
+
 ## 2026-06-07
 
 ### Plan
