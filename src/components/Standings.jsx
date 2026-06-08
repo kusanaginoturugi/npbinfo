@@ -348,6 +348,8 @@ export default function Standings({
                 <> 2026年のバンテリンドームはホームランテラス新設のため補正対象外です。</>
               )}
               {' '}
+              DER近似はチーム投手成績から本塁打以外のインプレーをどれだけアウトにしたかを推定した独自指標です。
+              {' '}
               <button
                 type="button"
                 className="methodology-link"

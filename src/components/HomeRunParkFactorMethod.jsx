@@ -2,18 +2,18 @@ export default function HomeRunParkFactorMethod({ onBack }) {
   return (
     <section className="section methodology-page">
       <div className="methodology-heading">
-        <h2 className="section-title">本塁打の球場補正について</h2>
+        <h2 className="section-title">独自指標の計算方法</h2>
         <button type="button" className="methodology-back" onClick={onBack}>
           順位表へ戻る
         </button>
       </div>
 
       <p className="methodology-lead">
-        この補正値はNPB公式記録ではなく、球場ごとの本塁打の出やすさを比較するための独自推定です。
+        本塁打の球場補正とDER近似はNPB公式記録ではなく、チーム成績を眺めるための独自推定です。
         順位や勝敗の算出には使用していません。
       </p>
 
-      <h3>データ</h3>
+      <h3>本塁打補正のデータ</h3>
       <ul>
         <li>対象は2023〜2025年のNPB一軍公式戦・セ・パ交流戦、計2,598試合です。</li>
         <li>NPB公式の試合日程・試合詳細から、開催球場、主催球団、両軍の本塁打数を取得しています。</li>
@@ -51,6 +51,20 @@ export default function HomeRunParkFactorMethod({ onBack }) {
         選手評価や将来予測ではなく、チーム本塁打数を球場環境込みで眺めるための参考値です。
       </p>
 
+      <h3>DER近似</h3>
+      <p>
+        DER（Defensive Efficiency Ratio）は、本塁打を除いたインプレー打球をどれだけアウトにしたかを見る守備効率です。
+        NPB公式のチーム投手成績から取得できる範囲で、次の近似式を使っています。
+      </p>
+      <div className="methodology-formula">
+        <code>DER近似 = 1 - (被安打 - 被本塁打) ÷ (打者 - 四球 - 死球 - 三振 - 被本塁打)</code>
+      </div>
+      <p>
+        失策数は記録員判断や選手個人のミスに寄りやすいため、グラフでは守備指標として使っていません。
+        DER近似は投手成績から作るため、打球方向、打球速度、守備位置、犠打、犠飛、打撃妨害などは分離できません。
+        守備範囲やチーム全体のアウト化能力を見るための参考値として表示しています。
+      </p>
+
       <h3>出典・確認</h3>
       <ul className="methodology-sources">
         <li>
@@ -65,6 +79,11 @@ export default function HomeRunParkFactorMethod({ onBack }) {
             rel="noreferrer"
           >
             中日ドラゴンズ公式 ホームランウイング案内
+          </a>
+        </li>
+        <li>
+          <a href="https://npb.jp/bis/2026/stats/tmp_c.html" target="_blank" rel="noreferrer">
+            NPB.jp チーム投手成績
           </a>
         </li>
         <li>
