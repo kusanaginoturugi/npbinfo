@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { TEAMS } from '../data/teams';
+import { TEAMS, getContrastColor, getTeamInfo } from '../data/teams';
 import { useFavorites } from '../hooks/useFavorites';
 import { apiCache } from '../utils/apiCache';
 import { isDebugMode, withNoCache } from '../utils/debug';
@@ -340,17 +340,24 @@ export default function PlayerStats({
           style={{ minWidth: '180px' }}
         />
         <div className="tab-bar" style={{ marginBottom: 0 }}>
-          {TEAM_FILTERS_BY_LEAGUE(league).map(team => (
-            <label key={team} className={`tab-btn ${selectedTeams.includes(team) ? 'active' : ''}`}>
-              <input
-                type="checkbox"
-                checked={selectedTeams.includes(team)}
-                onChange={() => toggleTeamFilter(team)}
-                style={{ marginRight: '4px' }}
-              />
-              {team}
-            </label>
-          ))}
+          {TEAM_FILTERS_BY_LEAGUE(league).map(team => {
+            const selected = selectedTeams.includes(team);
+            const bg = getTeamInfo(team)?.colors?.[0] ?? '#555';
+            const style = selected
+              ? { background: bg, color: getContrastColor(bg), borderColor: bg }
+              : { color: bg, borderColor: bg };
+            return (
+              <label key={team} className={`tab-btn ${selected ? 'active' : ''}`} style={style}>
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  onChange={() => toggleTeamFilter(team)}
+                  style={{ marginRight: '4px' }}
+                />
+                {team}
+              </label>
+            );
+          })}
         </div>
       </div>
 
