@@ -47,6 +47,8 @@ const TEAM_MAP = {
 };
 
 const TEAM_FILTERS = Object.keys(TEAMS).filter(name => name !== '横浜DeNA');
+const TEAM_FILTERS_BY_LEAGUE = (league) =>
+  TEAM_FILTERS.filter(name => TEAMS[name]?.league === league);
 
 function StatsTable({ players, type, sortConfig, onSort }) {
   const cols = type === 'batting' ? BATTING_COLS : PITCHING_COLS;
@@ -285,6 +287,7 @@ export default function PlayerStats({
               className={`tab-btn ${league === l.key ? 'active' : ''}`}
               onClick={() => {
                 setLeague(l.key);
+                setSelectedTeams([]);
                 onRouteChange?.(type, l.key, year);
               }}
             >
@@ -337,7 +340,7 @@ export default function PlayerStats({
           style={{ minWidth: '180px' }}
         />
         <div className="tab-bar" style={{ marginBottom: 0 }}>
-          {TEAM_FILTERS.map(team => (
+          {TEAM_FILTERS_BY_LEAGUE(league).map(team => (
             <label key={team} className={`tab-btn ${selectedTeams.includes(team) ? 'active' : ''}`}>
               <input
                 type="checkbox"
