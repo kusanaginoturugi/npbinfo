@@ -46,6 +46,13 @@ const TEAM_MAP = {
   'ソ': 'ソフトバンク', '日': '日本ハム', '楽': '楽天', 'ロ': 'ロッテ', 'オ': 'オリックス', '西': '西武'
 };
 
+// 既定ソート: 投手=防御率昇順 / 打者=打率降順
+const DEFAULT_SORT = {
+  batting: { key: 'avg', direction: 'desc' },
+  pitching: { key: 'era', direction: 'asc' },
+};
+const defaultSortFor = (type) => DEFAULT_SORT[type] ?? DEFAULT_SORT.batting;
+
 const TEAM_FILTERS = Object.keys(TEAMS).filter(name => name !== '横浜DeNA');
 const TEAM_FILTERS_BY_LEAGUE = (league) =>
   TEAM_FILTERS.filter(name => TEAMS[name]?.league === league);
@@ -85,6 +92,7 @@ function StatsTable({ players, type, sortConfig, onSort }) {
             <tr key={i} className={i % 2 === 0 ? 'row-even' : 'row-odd'}>
               {cols.map(c => {
                 let val = p[c.key];
+                if (c.key === 'rank') val = i + 1; // 表示順の連番
                 if (c.key === 'team') val = TEAM_MAP[val] || val;
                 
                 return (
@@ -125,8 +133,8 @@ export default function PlayerStats({
   const { isFavorite } = useFavorites();
   const debugMode = isDebugMode();
   
-  // ソート設定: 初期状態は順位の昇順
-  const [sortConfig, setSortConfig] = useState({ key: 'rank', direction: 'asc' });
+  // ソート設定: 既定は投手=防御率昇順 / 打者=打率降順。順位列は表示順の連番。
+  const [sortConfig, setSortConfig] = useState(() => defaultSortFor(initialType));
 
   const cacheKey = `stats:${type}-${league}-${year}`;
 
@@ -182,6 +190,11 @@ export default function PlayerStats({
   }, [cacheKey, cache, type, league, year, debugMode]);
 
   const handleSort = (key) => {
+    // 順位列は表示順の連番なのでソートキーにせず、既定ソートへ戻す
+    if (key === 'rank') {
+      setSortConfig(defaultSortFor(type));
+      return;
+    }
     setSortConfig(prev => {
       if (prev.key !== key) {
         return { key, direction: 'asc' };
@@ -189,7 +202,7 @@ export default function PlayerStats({
       if (prev.direction === 'asc') {
         return { key, direction: 'desc' };
       }
-      return { key: 'rank', direction: 'asc' };
+      return defaultSortFor(type);
     });
   };
 
@@ -273,7 +286,7 @@ export default function PlayerStats({
               onClick={() => {
                 setType(t.key);
                 onRouteChange?.(t.key, league, year);
-                setSortConfig({ key: 'rank', direction: 'asc' }); // タイプ切り替え時はソートリセット
+                setSortConfig(defaultSortFor(t.key)); // タイプ切り替え時はソートリセット
               }}
             >
               {t.label}
