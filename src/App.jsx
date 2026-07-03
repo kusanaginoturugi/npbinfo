@@ -4,6 +4,7 @@ import PlayerStats from './components/PlayerStats';
 import Schedule from './components/Schedule';
 import Stadiums from './components/Stadiums';
 import TeamTimeline from './components/TeamTimeline';
+import Threads from './components/Threads';
 import HomeRunParkFactorMethod from './components/HomeRunParkFactorMethod';
 import { getBuildInfo, isDebugMode, syncDebugFromUrl, withNoCache } from './utils/debug';
 import {
@@ -24,6 +25,7 @@ const TABS = [
   { key: 'standings', label: '順位表' },
   { key: 'players', label: '選手成績' },
   { key: 'schedule', label: '試合日程' },
+  { key: 'threads', label: '掲示板' },
   { key: 'stadiums', label: '球場情報' },
 ];
 
@@ -227,6 +229,9 @@ export default function App() {
             selectedStadiumId={route.stadiumId}
             onSelectStadium={openStadium}
           />
+        )}
+        {route.tab === 'threads' && (
+          <Threads key={route.path} />
         )}
         {route.tab === 'team' && route.team === 'hanshin' && (
           <TeamTimeline key={`${route.path}-${dark ? 'dark' : 'light'}`} dark={dark} />

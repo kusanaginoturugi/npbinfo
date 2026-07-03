@@ -792,6 +792,110 @@ body {
   color: var(--color-tab-active);
 }
 
+/* ─── Threads ──────────────────────────────────────────────── */
+.threads-note {
+  margin: 4px 0 14px;
+  color: var(--color-footer);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.thread-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.thread-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 150px;
+  border: 1px solid var(--border-table);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--bg-row-even);
+}
+
+[data-theme="dark"] .thread-card {
+  background: var(--bg-row-odd);
+}
+
+.thread-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--color-footer);
+  font-size: 12px;
+}
+
+.thread-board {
+  font-weight: 700;
+}
+
+.thread-count {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.thread-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  color: var(--color-footer);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.thread-delta {
+  margin-left: 6px;
+  color: var(--color-tab-active);
+  font-weight: 700;
+}
+
+.thread-title {
+  margin: 0;
+  color: var(--color-heading);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.thread-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.thread-tag {
+  border: 1px solid var(--border-tab);
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: var(--color-tab-active);
+  background: var(--bg-tab-active);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.thread-link {
+  margin-top: auto;
+  color: var(--color-tab-active);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.thread-link:hover {
+  text-decoration: underline;
+}
+
+.threads-updated {
+  margin-top: 12px;
+  color: var(--color-footer);
+  font-size: 11px;
+  text-align: right;
+}
+
 /* ─── Schedule ─────────────────────────────────────────────── */
 .schedule-list {
   display: grid;

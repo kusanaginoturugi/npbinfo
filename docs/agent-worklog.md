@@ -1,5 +1,59 @@
 # Agent Worklog
 
+## 2026-07-03
+
+### Plan
+
+- Issue #12 の代替ソーシャル情報として、5ch の subject.txt から関連スレッド一覧を表示する。
+- KV 操作数アラート対策として、APIレスポンスキャッシュを Workers Cache API へ移す。
+- スクレイピング済みデータの永続保存先として D1 を導入し、順位表から段階移行する。
+- 手動更新APIと既存Cronで D1 を温める導線を作る。
+
+### Work Log
+
+- `/threads` 画面と `/api/threads` を追加した。
+  - 5ch の `野球ch` / `プロ野球` の `subject.txt` を取得し、球団名・愛称で関連スレッドを抽出する。
+  - レス本文は取得せず、スレタイ、レス数、掲載順位、5chリンクだけを表示する。
+  - 前回snapshotとの差分から `speedPerHour` を算出し、勢い順・レス数順・掲載順・板別の並び替えを追加した。
+- APIレスポンスキャッシュを KV から Workers Cache API に移した。
+  - `standings`, `stats`, `schedule`, `headtohead`, `recent`, `weather` のリクエストごとのKV read/writeを止めた。
+  - 掲示板snapshotも Cache API に置き、掲示板機能でKVを消費しないようにした。
+- `npbinfo-db` D1 database を作成し、`DB` binding を `wrangler.jsonc` に追加した。
+  - `migrations/0001_initial_data_cache.sql` を追加し、local / remote に適用した。
+  - `fetch_runs`, `standings_payloads`, `standings_snapshots`, `player_stats`, `games`, `team_metrics` を作成した。
+- 順位表のD1連携を追加した。
+  - 過去年はD1の最新 `standings_payloads` から読む。
+  - 現年度は鮮度優先で従来スクレイピングを継続する。
+  - スクレイピング後はD1へ `payload_json` と正規化行を保存する。
+- `POST /api/admin/refresh/standings` を追加した。
+  - 本番は `Authorization: Bearer $REFRESH_TOKEN` 必須。
+  - ローカルは `REFRESH_TOKEN` 未設定でも `localhost` / `127.0.0.1` から許可する。
+- `scheduled()` handler を追加し、既存Cronからセ・パ順位表をD1へ保存できるようにした。
+  - Dashboard上の既存Cronは JST 21:30 / 00:30 / 03:30。
+  - Cron枠上限に当たるため、`wrangler.jsonc` にはcron設定を書かない。
+- `docs/cache-storage-migration.md` と `docs/d1-setup.md` を追加し、移行方針・D1セットアップ・手動更新手順を記録した。
+- 本番Workerへdeployし、`REFRESH_TOKEN` secret を設定した。
+- 本番管理APIで `2026 cl` / `2026 pl` をD1へ保存した。
+
+### Verification
+
+- `node --check worker/index.js` 成功。
+- `sqlite3 :memory: < migrations/0001_initial_data_cache.sql` 成功。
+- `npm test` 成功。
+- `npm run build` 成功。
+- ローカルWranglerで `/api/threads`, `/api/standings`, `/api/admin/refresh/standings` を確認した。
+- リモートD1で `standings_snapshots` に `2026 cl` 6行、`2026 pl` 6行が保存されていることを確認した。
+- 本番 `/api/debug` と `/api/standings/cl?year=2026` を確認した。
+- 最新本番 Worker Version ID は `7d675d48-ff6a-491f-b889-f11944d1d130`。
+
+### Handoff
+
+- Dashboard上の既存Cronは残っており、最新Workerには `scheduled` handler がある。
+- `wrangler.jsonc` にcronを書くとCloudflare APIがcron上限エラーを返すため、cronはDashboard管理のままにする。
+- 本番の `gitRevision` は未コミットdeploy時点の `a3c705f` のまま。commit/push後のdeployで揃う。
+- `REFRESH_TOKEN` はWorker secretに設定済み。ローカルの一時ファイルは削除済み。
+- 次の段階は `player_stats` と `games` のD1移行、または既存KV用途の棚卸し。
+
 ## 2026-06-08
 
 ### Plan

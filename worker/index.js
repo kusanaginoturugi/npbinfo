@@ -4,6 +4,7 @@
 // - /api/schedule/:month      → npb.jp 試合日程スクレイピング
 // - /api/weather              → Open-Meteo 天気予報プロキシ
 // - /api/headtohead/:league   → チーム間対戦成績スクレイピング
+// - /api/threads              → 5ch subject.txt から関連スレッド一覧
 // - /og/standings/:league     → 順位表 OGP SVG
 // - その他                    → dist/ の静的アセットを返す
 import {
@@ -78,26 +79,44 @@ function skipCache(request) {
   return new URL(request.url).searchParams.get('nocache') === '1';
 }
 
-async function getCachedJson(env, key, request) {
-  if (skipCache(request) || !env.CACHE) return null;
+function edgeCacheKeyRequest(request, key) {
+  const url = new URL(request.url);
+  return new Request(`${url.origin}/__edge-cache/${encodeURIComponent(key)}`);
+}
+
+async function getEdgeCachedJson(request, key) {
+  if (skipCache(request) || typeof caches === 'undefined') return null;
 
   try {
-    return await env.CACHE.get(key, 'json');
+    const response = await caches.default.match(edgeCacheKeyRequest(request, key));
+    return response ? await response.json() : null;
   } catch (err) {
-    console.warn(`KV get failed for ${key}: ${err.message}`);
+    console.warn(`Edge cache get failed for ${key}: ${err.message}`);
     return null;
   }
 }
 
-async function putCachedJson(env, key, data, ttl, request) {
-  if (skipCache(request) || !env.CACHE) return;
+async function putEdgeCachedJson(request, key, data, ttl) {
+  if (skipCache(request) || typeof caches === 'undefined') return;
 
   try {
-    const options = ttl == null ? {} : { expirationTtl: ttl };
-    await env.CACHE.put(key, JSON.stringify(data), options);
+    const response = Response.json(data, {
+      headers: {
+        'Cache-Control': `public, max-age=${ttl}`,
+      },
+    });
+    await caches.default.put(edgeCacheKeyRequest(request, key), response);
   } catch (err) {
-    console.warn(`KV put failed for ${key}: ${err.message}`);
+    console.warn(`Edge cache put failed for ${key}: ${err.message}`);
   }
+}
+
+async function getCachedJson(_env, key, request) {
+  return getEdgeCachedJson(request, `api:${key}`);
+}
+
+async function putCachedJson(_env, key, data, ttl, request) {
+  await putEdgeCachedJson(request, `api:${key}`, data, ttl ?? 31536000);
 }
 
 function getScheduleTtl(year, month) {
@@ -122,6 +141,160 @@ function isValidDateValue(dateValue) {
   return date.getUTCFullYear() === year
     && date.getUTCMonth() === month - 1
     && date.getUTCDate() === day;
+}
+
+// ─── 5ch 関連スレッド ────────────────────────────────────────
+const THREAD_BOARDS = [
+  {
+    key: 'livebase',
+    label: '野球ch',
+    host: 'tanuki.5ch.net',
+    board: 'livebase',
+    url: 'https://tanuki.5ch.net/livebase/subject.txt',
+  },
+  {
+    key: 'base',
+    label: 'プロ野球',
+    host: 'rio2016.5ch.net',
+    board: 'base',
+    url: 'https://rio2016.5ch.net/base/subject.txt',
+  },
+];
+
+const THREAD_TEAM_KEYWORDS = {
+  'ヤクルト': ['ヤクルト', 'スワローズ'],
+  '阪神': ['阪神', 'タイガース'],
+  '巨人': ['巨人', '読売', 'ジャイアンツ'],
+  'DeNA': ['DeNA', '横浜', 'ベイスターズ'],
+  '広島': ['広島', 'カープ'],
+  '中日': ['中日', 'ドラゴンズ'],
+  'ソフトバンク': ['ソフトバンク', 'ホークス'],
+  '日本ハム': ['日本ハム', 'ファイターズ'],
+  '楽天': ['楽天', 'イーグルス'],
+  'ロッテ': ['ロッテ', 'マリーンズ'],
+  'オリックス': ['オリックス', 'バファローズ'],
+  '西武': ['西武', 'ライオンズ'],
+};
+
+function threadKeywordsForTeam(team) {
+  if (!team || team === 'all') {
+    return Object.values(THREAD_TEAM_KEYWORDS).flat();
+  }
+  const normalized = normalizeTeamName(team);
+  return THREAD_TEAM_KEYWORDS[normalized] ?? [normalized];
+}
+
+function parseThreadSubject(text, board, previousCounts = {}, sampleHours = null) {
+  return String(text ?? '')
+    .split('\n')
+    .map((line, index) => {
+      const match = line.trim().match(/^(\d+)\.dat<>(.+)\s+\((\d+)\)$/);
+      if (!match) return null;
+      const threadId = match[1];
+      const responseCount = Number.parseInt(match[3], 10);
+      const previousCount = previousCounts[threadId];
+      const delta = Number.isFinite(previousCount) ? Math.max(0, responseCount - previousCount) : 0;
+      return {
+        id: `${board.key}:${threadId}`,
+        threadId,
+        board: board.key,
+        boardLabel: board.label,
+        subjectRank: index + 1,
+        title: normalizeText(match[2]),
+        responseCount,
+        delta,
+        sampleHours,
+        speedPerHour: sampleHours ? delta / sampleHours : null,
+        url: `https://${board.host}/test/read.cgi/${board.board}/${threadId}/`,
+      };
+    })
+    .filter(Boolean);
+}
+
+async function fetchBoardThreads(board, request) {
+  const snapshotKey = `threads:snapshot:${board.key}`;
+  const previous = await getEdgeCachedJson(request, snapshotKey);
+  const previousAt = previous?.updatedAt ? Date.parse(previous.updatedAt) : NaN;
+  const sampleHours = Number.isFinite(previousAt)
+    ? Math.max((Date.now() - previousAt) / 3600000, 1 / 60)
+    : null;
+  const response = await fetch(board.url, {
+    headers: {
+      'User-Agent': 'npbinfo/1.0 (+https://npbinfo.kusanaginoturugi.workers.dev)',
+    },
+  });
+  if (!response.ok) throw new Error(`${board.key} subject ${response.status}`);
+
+  const bytes = await response.arrayBuffer();
+  const text = new TextDecoder('shift_jis').decode(bytes);
+  const threads = parseThreadSubject(text, board, previous?.counts ?? {}, sampleHours);
+  const counts = Object.fromEntries(threads.map(thread => [thread.threadId, thread.responseCount]));
+  await putEdgeCachedJson(request, snapshotKey, { counts, updatedAt: new Date().toISOString() }, 86400);
+  return threads;
+}
+
+function filterRelatedThreads(threads, team) {
+  const keywords = threadKeywordsForTeam(team).map(keyword => keyword.toLowerCase());
+  return threads
+    .map(thread => {
+      const title = thread.title.toLowerCase();
+      const matchedKeywords = keywords.filter(keyword => title.includes(keyword.toLowerCase()));
+      if (!matchedKeywords.length) return null;
+      const matchedTeams = Object.entries(THREAD_TEAM_KEYWORDS)
+        .filter(([, teamKeywords]) => teamKeywords.some(keyword => title.includes(keyword.toLowerCase())))
+        .map(([teamName]) => teamName);
+      return { ...thread, matchedKeywords, matchedTeams };
+    })
+    .filter(Boolean);
+}
+
+function sortThreads(threads, sort) {
+  const comparers = {
+    momentum: (a, b) => ((b.speedPerHour ?? -1) - (a.speedPerHour ?? -1))
+      || (b.delta - a.delta)
+      || (b.responseCount - a.responseCount),
+    responses: (a, b) => (b.responseCount - a.responseCount)
+      || ((b.speedPerHour ?? -1) - (a.speedPerHour ?? -1)),
+    recent: (a, b) => (a.subjectRank - b.subjectRank)
+      || (b.responseCount - a.responseCount),
+    board: (a, b) => a.boardLabel.localeCompare(b.boardLabel, 'ja')
+      || (a.subjectRank - b.subjectRank),
+  };
+  return [...threads].sort(comparers[sort] ?? comparers.momentum);
+}
+
+async function handleThreads(request, env) {
+  const url = new URL(request.url);
+  const team = url.searchParams.get('team') || 'all';
+  const sort = url.searchParams.get('sort') || 'momentum';
+  const limit = Math.min(Math.max(Number.parseInt(url.searchParams.get('limit') || '20', 10), 1), 30);
+  const cacheKey = `threads:v2:${team}:${sort}:${limit}`;
+  const cached = await getEdgeCachedJson(request, cacheKey);
+  if (cached) return Response.json(cached);
+
+  const settled = await Promise.allSettled(THREAD_BOARDS.map(board => fetchBoardThreads(board, request)));
+  const errors = [];
+  const allThreads = [];
+  settled.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      allThreads.push(...result.value);
+    } else {
+      errors.push({ board: THREAD_BOARDS[index].key, message: result.reason?.message ?? 'fetch failed' });
+    }
+  });
+
+  const threads = sortThreads(filterRelatedThreads(allThreads, team), sort).slice(0, limit);
+  const data = {
+    team,
+    sort,
+    generatedAt: new Date().toISOString(),
+    source: '5ch subject.txt',
+    boards: THREAD_BOARDS.map(({ key, label }) => ({ key, label })),
+    errors,
+    threads,
+  };
+  await putEdgeCachedJson(request, cacheKey, data, 180);
+  return Response.json(data);
 }
 
 // ─── 順位表 ──────────────────────────────────────────────────
@@ -325,6 +498,299 @@ async function mergeAdjustedHomeRuns(teams, year, env) {
   }
 }
 
+function hasD1(env) {
+  return Boolean(env?.DB?.prepare);
+}
+
+function shouldReadStandingsFromD1(year) {
+  return year < getCurrentYear();
+}
+
+function numberOrNull(value) {
+  if (value == null || value === '-' || value === '--') return null;
+  const parsed = Number(String(value).replace(/^0(?=\.)/, ''));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function integerOrNull(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function readStandingsFromD1(env, league, year) {
+  if (!hasD1(env) || !shouldReadStandingsFromD1(year)) return null;
+
+  try {
+    const result = await env.DB.prepare(`
+      SELECT payload_json
+      FROM standings_payloads
+      WHERE year = ?1
+        AND league = ?2
+      ORDER BY fetched_at DESC
+      LIMIT 1
+    `).bind(year, league).all();
+    const row = result.results?.[0];
+    return row?.payload_json ? JSON.parse(row.payload_json) : null;
+  } catch (err) {
+    console.warn(`D1 standings read failed for ${league}:${year}: ${err.message}`);
+    return null;
+  }
+}
+
+async function clearEdgeCache(request, key) {
+  if (skipCache(request) || typeof caches === 'undefined') return;
+
+  try {
+    await caches.default.delete(edgeCacheKeyRequest(request, key));
+  } catch (err) {
+    console.warn(`Edge cache delete failed for ${key}: ${err.message}`);
+  }
+}
+
+async function writeStandingsToD1(env, data, sourceUrl) {
+  if (!hasD1(env) || !Array.isArray(data?.teams) || !data.teams.length) return;
+
+  const fetchedAt = new Date().toISOString();
+  const startedAt = Date.now();
+  try {
+    const statements = [
+      env.DB.prepare(`
+        INSERT OR REPLACE INTO standings_payloads (
+          year,
+          league,
+          payload_json,
+          source_url,
+          fetched_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5)
+      `).bind(
+        data.year,
+        data.league,
+        JSON.stringify(data),
+        sourceUrl,
+        fetchedAt,
+      ),
+    ];
+    statements.push(...data.teams.map(team => env.DB.prepare(`
+      INSERT OR REPLACE INTO standings_snapshots (
+        year,
+        league,
+        team_name,
+        rank,
+        play_game_count,
+        win,
+        lose,
+        draw,
+        pct,
+        games_behind,
+        avg,
+        hr,
+        sb,
+        ops,
+        era,
+        der_approx,
+        team_json,
+        update_note,
+        source_url,
+        fetched_at
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
+    `).bind(
+      data.year,
+      data.league,
+      team.name,
+      integerOrNull(team.rank),
+      integerOrNull(team.playGameCount),
+      integerOrNull(team.win),
+      integerOrNull(team.lose),
+      integerOrNull(team.draw),
+      numberOrNull(team.pct),
+      team.gamesBehind ?? null,
+      numberOrNull(team.avg),
+      integerOrNull(team.hr),
+      integerOrNull(team.sb),
+      numberOrNull(team.ops),
+      numberOrNull(team.era),
+      numberOrNull(team.derApprox),
+      JSON.stringify(team),
+      data.updateNote ?? null,
+      sourceUrl,
+      fetchedAt,
+    )));
+    statements.push(env.DB.prepare(`
+      INSERT INTO fetch_runs (
+        source,
+        source_url,
+        target_type,
+        target_key,
+        status,
+        row_count,
+        duration_ms,
+        fetched_at
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+    `).bind(
+      'npb.jp',
+      sourceUrl,
+      'standings',
+      `${data.league}:${data.year}`,
+      'ok',
+      data.teams.length,
+      Date.now() - startedAt,
+      fetchedAt,
+    ));
+    await env.DB.batch(statements);
+  } catch (err) {
+    console.warn(`D1 standings write failed for ${data.league}:${data.year}: ${err.message}`);
+  }
+}
+
+async function buildStandingsData(league, year, request, env) {
+  if (league === 'cp' || league === 'op') {
+    const sourceUrl = `https://npb.jp/bis/${year}/stats/${league === 'cp' ? 'std_inter.html' : 'std_op.html'}`;
+    const specialStandings = await fetchSpecialStandings(league, year);
+    const interleagueData = league === 'cp'
+      ? await buildInterleagueStandingsData(year, specialStandings.teams, specialStandings.finishedGames, request, env)
+      : { teams: specialStandings.teams, updateNote: null };
+    const data = { league, year, teams: interleagueData.teams };
+    if (interleagueData.updateNote) data.updateNote = interleagueData.updateNote;
+    return { data, sourceUrl };
+  }
+
+  const leagueCode = league === 'cl' ? 'c' : 'p';
+  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+  const stdUrl = `https://npb.jp/bis/${year}/stats/std_${leagueCode}.html`;
+  const tmbUrl = `https://npb.jp/bis/${year}/stats/tmb_${leagueCode}.html`;
+  const tmpUrl = `https://npb.jp/bis/${year}/stats/tmp_${leagueCode}.html`;
+
+  const [stdRes, tmbRes, tmpRes] = await Promise.all([
+    fetch(stdUrl, { headers: { 'User-Agent': UA } }),
+    fetch(tmbUrl, { headers: { 'User-Agent': UA } }),
+    fetch(tmpUrl, { headers: { 'User-Agent': UA } }),
+  ]);
+
+  if (!stdRes.ok) throw new Error(`npb.jp (std) returned ${stdRes.status}`);
+
+  const isLegacy = year <= 2024;
+  const [battingStats, pitchingStats] = await Promise.all([
+    parseExtraStats(tmbRes, 'tablefix2', 0, { 1: 'avg', 9: 'hr', 12: 'sb', '-2': 'slg', '-1': 'obp' }, isLegacy),
+    parseExtraStats(tmpRes, 'tablefix2', 0, {
+      1: 'era',
+      12: 'battersFaced',
+      14: 'hitsAllowed',
+      15: 'homeRunsAllowed',
+      16: 'walks',
+      18: 'hitBatters',
+      19: 'strikeouts',
+    }, isLegacy),
+  ]);
+  Object.values(battingStats).forEach((stats) => {
+    stats.ops = calculateOps(stats.slg, stats.obp);
+  });
+
+  const stdHtml = await stdRes.text();
+  const updateNote = await buildStandingsUpdateNote(year, request, env);
+  const teams = [];
+  await collectStandingsTeams(
+    new Response(stdHtml),
+    teams,
+    battingStats,
+    pitchingStats,
+  );
+  const hrAdjustment = await mergeAdjustedHomeRuns(teams, year, env);
+
+  const data = { league, year, teams };
+  if (updateNote) data.updateNote = updateNote;
+  if (hrAdjustment) data.hrAdjustment = hrAdjustment;
+  return { data, sourceUrl: stdUrl };
+}
+
+function isLocalRequest(request) {
+  const host = new URL(request.url).hostname;
+  return host === 'localhost' || host === '127.0.0.1';
+}
+
+function isRefreshAuthorized(request, env) {
+  if (!env.REFRESH_TOKEN) return isLocalRequest(request);
+  const header = request.headers.get('Authorization') ?? '';
+  return header === `Bearer ${env.REFRESH_TOKEN}`;
+}
+
+async function refreshStandings(league, year, request, env) {
+  if (!VALID_LEAGUES.has(league)) {
+    throw new Error(`invalid league: ${league}`);
+  }
+  if (!getAvailableYears().includes(year)) {
+    throw new Error(`invalid year: ${year}`);
+  }
+
+  const { data, sourceUrl } = await buildStandingsData(league, year, request, env);
+  await writeStandingsToD1(env, data, sourceUrl);
+  const cacheKey = `standings:v5:${league}:${year}`;
+  await clearEdgeCache(request, `api:${cacheKey}`);
+  await putCachedJson(env, cacheKey, data, getYearAwareTtl(year, 600), request);
+  return {
+    league,
+    year,
+    teams: data.teams.length,
+    sourceUrl,
+    stored: hasD1(env),
+  };
+}
+
+async function handleRefreshStandings(request, env) {
+  if (request.method !== 'POST') {
+    return new Response('Method Not Allowed', { status: 405 });
+  }
+  if (!isRefreshAuthorized(request, env)) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  const url = new URL(request.url);
+  const requestedLeague = url.searchParams.get('league') || 'all';
+  const year = Number.parseInt(url.searchParams.get('year') || String(getCurrentYear()), 10);
+  const leagues = requestedLeague === 'all'
+    ? ['cl', 'pl', 'cp', 'op']
+    : [requestedLeague];
+
+  try {
+    const refreshed = [];
+    for (const league of leagues) {
+      refreshed.push(await refreshStandings(league, year, request, env));
+    }
+    return Response.json({
+      ok: true,
+      target: 'standings',
+      refreshed,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    return Response.json(
+      { ok: false, error: 'refresh failed', detail: err.message },
+      { status: 400 },
+    );
+  }
+}
+
+async function refreshScheduledStandings(controller, env) {
+  const year = getCurrentYear();
+  const request = new Request(`https://npbinfo.kusanaginoturugi.workers.dev/__scheduled?cron=${encodeURIComponent(controller.cron ?? '')}`);
+  const refreshed = [];
+
+  for (const league of ['cl', 'pl']) {
+    try {
+      refreshed.push(await refreshStandings(league, year, request, env));
+    } catch (err) {
+      console.error(`Scheduled standings refresh failed for ${league}:${year}: ${err.message}`);
+    }
+  }
+
+  console.log(JSON.stringify({
+    event: 'scheduled-standings-refresh',
+    cron: controller.cron,
+    year,
+    refreshed,
+    generatedAt: new Date().toISOString(),
+  }));
+}
+
 async function handleStandings(league, request, env) {
   if (!VALID_LEAGUES.has(league)) {
     return new Response('Not Found', { status: 404 });
@@ -335,72 +801,15 @@ async function handleStandings(league, request, env) {
   const cached = await getCachedJson(env, cacheKey, request);
   if (cached) return Response.json(cached);
 
-  // 交流戦・オープン戦は NPB 公式の専用勝敗表を直接読む
-  if (league === 'cp' || league === 'op') {
-    try {
-      const specialStandings = await fetchSpecialStandings(league, year);
-      const interleagueData = league === 'cp'
-        ? await buildInterleagueStandingsData(year, specialStandings.teams, specialStandings.finishedGames, request, env)
-        : { teams: specialStandings.teams, updateNote: null };
-      const teams = interleagueData.teams;
-      const data = { league, year, teams };
-      if (interleagueData.updateNote) data.updateNote = interleagueData.updateNote;
-      await putCachedJson(env, cacheKey, data, getYearAwareTtl(year, 600), request);
-      return Response.json(data);
-    } catch (err) {
-      return Response.json({ error: '取得エラー', detail: err.message }, { status: 502 });
-    }
+  const stored = await readStandingsFromD1(env, league, year);
+  if (stored) {
+    await putCachedJson(env, cacheKey, stored, getYearAwareTtl(year, 600), request);
+    return Response.json(stored);
   }
 
-  // セ・パ リーグは npb.jp からスクレイピング
-  const leagueCode = league === 'cl' ? 'c' : 'p';
-  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
-  const stdUrl = `https://npb.jp/bis/${year}/stats/std_${leagueCode}.html`;
-  const tmbUrl = `https://npb.jp/bis/${year}/stats/tmb_${leagueCode}.html`;
-  const tmpUrl = `https://npb.jp/bis/${year}/stats/tmp_${leagueCode}.html`;
-
   try {
-    const [stdRes, tmbRes, tmpRes] = await Promise.all([
-      fetch(stdUrl, { headers: { 'User-Agent': UA } }),
-      fetch(tmbUrl, { headers: { 'User-Agent': UA } }),
-      fetch(tmpUrl, { headers: { 'User-Agent': UA } }),
-    ]);
-
-    if (!stdRes.ok) throw new Error(`npb.jp (std) returned ${stdRes.status}`);
-
-    const isLegacy = year <= 2024;
-
-    // 打撃・投手成績を並列でパース
-    const [battingStats, pitchingStats] = await Promise.all([
-      parseExtraStats(tmbRes, 'tablefix2', 0, { 1: 'avg', 9: 'hr', 12: 'sb', '-2': 'slg', '-1': 'obp' }, isLegacy),
-      parseExtraStats(tmpRes, 'tablefix2', 0, {
-        1: 'era',
-        12: 'battersFaced',
-        14: 'hitsAllowed',
-        15: 'homeRunsAllowed',
-        16: 'walks',
-        18: 'hitBatters',
-        19: 'strikeouts',
-      }, isLegacy),
-    ]);
-    Object.values(battingStats).forEach((stats) => {
-      stats.ops = calculateOps(stats.slg, stats.obp);
-    });
-
-    const stdHtml = await stdRes.text();
-    const updateNote = await buildStandingsUpdateNote(year, request, env);
-    const teams = [];
-    await collectStandingsTeams(
-      new Response(stdHtml),
-      teams,
-      battingStats,
-      pitchingStats,
-    );
-    const hrAdjustment = await mergeAdjustedHomeRuns(teams, year, env);
-
-    const data = { league, year, teams };
-    if (updateNote) data.updateNote = updateNote;
-    if (hrAdjustment) data.hrAdjustment = hrAdjustment;
+    const { data, sourceUrl } = await buildStandingsData(league, year, request, env);
+    await writeStandingsToD1(env, data, sourceUrl);
     await putCachedJson(env, cacheKey, data, getYearAwareTtl(year, 600), request);
     return Response.json(data);
   } catch (err) {
@@ -1854,6 +2263,15 @@ async function handleRecent(league, request, env) {
 
 // ─── ルーター ─────────────────────────────────────────────────
 export default {
+  async scheduled(controller, env) {
+    try {
+      await refreshScheduledStandings(controller ?? { cron: '' }, env);
+    } catch (err) {
+      console.error(`Scheduled handler failed: ${err.message}`);
+      controller?.noRetry?.();
+    }
+  },
+
   async fetch(request, env) {
     const url = new URL(request.url);
     const segments = url.pathname.split('/').filter(Boolean);
@@ -1864,6 +2282,11 @@ export default {
         ...BUILD_INFO,
         now: new Date().toISOString(),
       });
+    }
+
+    // /api/admin/refresh/standings?year=YYYY&league=cl
+    if (segments[0] === 'api' && segments[1] === 'admin' && segments[2] === 'refresh' && segments[3] === 'standings') {
+      return handleRefreshStandings(request, env);
     }
 
     // /api/park-factors/hr
@@ -1877,6 +2300,11 @@ export default {
     // /api/recent/:league?year=YYYY
     if (segments[0] === 'api' && segments[1] === 'recent' && segments[2]) {
       return handleRecent(segments[2], request, env);
+    }
+
+    // /api/threads?team=...
+    if (segments[0] === 'api' && segments[1] === 'threads') {
+      return handleThreads(request, env);
     }
 
     // /api/standings/:league?year=YYYY

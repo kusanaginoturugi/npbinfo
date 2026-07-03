@@ -83,6 +83,15 @@ npm run deploy
 
 `wrangler.jsonc` で `assets.not_found_handling: "single-page-application"` を指定しており、`/api/*` 以外は `dist/` の静的アセットにフォールバックする SPA 構成。
 
+## D1
+
+スクレイピング済みデータを D1 に保存する移行を進めている。セットアップ手順は
+`docs/d1-setup.md`、移行計画は `docs/cache-storage-migration.md` を参照。
+
+順位表は Dashboard 上の既存 Cron Triggers で毎日 JST 21:30 / 00:30 / 03:30 に
+セ・パ両リーグを再取得し、D1 に保存する。Cron枠上限のため、`wrangler.jsonc`
+にはcron設定を書かない。
+
 ## API
 
 | メソッド | パス | 説明 |
@@ -91,7 +100,9 @@ npm run deploy
 | GET | `/api/stats/batting/:league?year=YYYY` | 打撃成績。`league` は `cl` / `pl` |
 | GET | `/api/stats/pitching/:league?year=YYYY` | 投手成績。`league` は `cl` / `pl` |
 | GET | `/api/schedule/YYYY-MM` | 月別の試合日程・結果 |
+| GET | `/api/threads` | 5ch の subject.txt から球団関連スレッド一覧 |
 | GET | `/api/debug` | App/API の buildId、buildTime、gitRevision |
+| POST | `/api/admin/refresh/standings` | 順位表を再取得してD1へ保存。`Authorization: Bearer $REFRESH_TOKEN` が必要 |
 | GET | `/og/standings/:league.png` | OGP 用順位表 PNG。`league` は `cl` / `pl` / `cp` / `op` |
 | GET | `/og/standings/:league` | OGP 用順位表 SVG。既存互換用 |
 | GET | `/api/park-factors/hr` | 本塁打パークファクターと算出メタデータ |

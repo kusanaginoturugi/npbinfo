@@ -16,6 +16,13 @@
       "id": "380a38d6849144f28fb6571b7b775c47"
     }
   ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "npbinfo-db",
+      "database_id": "07f6969c-53b7-4a61-8651-de7697d07555"
+    }
+  ],
   "observability": {
     "enabled": true
   }

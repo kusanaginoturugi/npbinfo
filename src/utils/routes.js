@@ -53,6 +53,10 @@ export function teamPath(teamSlug) {
   return `/teams/${teamSlug}`;
 }
 
+export function threadsPath() {
+  return '/threads';
+}
+
 export function parkFactorMethodPath() {
   return '/methodology/home-run-park-factor';
 }
@@ -76,6 +80,9 @@ export function defaultRoute(tab = 'standings') {
   if (tab === 'stadiums') {
     const stadiumId = STADIUMS[0].id;
     return { tab, stadiumId, path: stadiumPath(stadiumId) };
+  }
+  if (tab === 'threads') {
+    return { tab, path: threadsPath() };
   }
 
   return {
@@ -135,6 +142,13 @@ export function parseRoute(pathname) {
       tab: 'team',
       team: 'hanshin',
       path: teamPath('hanshin'),
+    };
+  }
+
+  if (segments[0] === 'threads' && segments.length === 1) {
+    return {
+      tab: 'threads',
+      path: threadsPath(),
     };
   }
 
