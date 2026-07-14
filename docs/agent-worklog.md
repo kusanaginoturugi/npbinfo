@@ -61,6 +61,19 @@
 - headless chromium で `/teams/softbank`（パ・リーグ側）と `/teams/hanshin` をスクショ確認。
 - 順位表DOMで `team-detail-link` が全6チームに付与されることを確認。
 
+### Work Log (4): 選手成績チームフィルタチップの配色改善
+
+- 未選択チップのチームカラー文字・枠を廃止（白背景に阪神の黄色が視認できない問題）。
+  - 順位表と同じ「チームカラーの丸 + 通常色テキスト」方式に変更。
+  - 選択時は従来どおりチームカラー背景 + コントラスト文字色。
+- `.h2h-dot` を汎用の `.team-color-dot` に改名し、対戦成績テーブルとチップで共用。
+- 選択中はチップ背景と丸が同色になるため、`.filter-chip.active .team-color-dot` で文字色リングを表示。
+
+### Verification (4)
+
+- `npm run build` / lint 通過。
+- headless chromium で `/stats/batting/central/2026` のチップ列をスクショ確認。全6球団とも白背景で視認可能。
+
 ## 2026-07-03
 
 ### Plan

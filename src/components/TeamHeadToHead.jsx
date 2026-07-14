@@ -41,7 +41,7 @@ function RecordTable({ title, records }) {
               return (
                 <tr key={opponent} className={i % 2 === 0 ? 'row-even' : 'row-odd'}>
                   <td className="team-cell">
-                    <span className="h2h-dot" style={{ background: color }} />
+                    <span className="team-color-dot" style={{ background: color }} />
                     {opponent}
                   </td>
                   {record ? (

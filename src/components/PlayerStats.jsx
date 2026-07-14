@@ -358,7 +358,7 @@ export default function PlayerStats({
             const bg = getTeamInfo(team)?.colors?.[0] ?? '#555';
             const style = selected
               ? { background: bg, color: getContrastColor(bg), borderColor: bg }
-              : { color: bg, borderColor: bg };
+              : undefined;
             return (
               <label key={team} className={`filter-chip ${selected ? 'active' : ''}`} style={style}>
                 <input
@@ -366,6 +366,7 @@ export default function PlayerStats({
                   checked={selected}
                   onChange={() => toggleTeamFilter(team)}
                 />
+                <span className="team-color-dot" style={{ background: bg }} />
                 {team}
               </label>
             );
