@@ -263,6 +263,15 @@ body {
   border-bottom: 2px solid var(--border-section);
 }
 
+/* ─── 操作系 UI の命名ルール ─────────────────────────────────
+   .tab-bar / .tab-btn             : 画面・カテゴリ切替のタブ専用
+   .control-select / .control-input / .control-button : フォーム操作
+   .segmented-control(-btn)        : 表示モード等の排他切替
+   .filter-chip-bar / .filter-chip : 複数選択フィルタ（checkbox チップ）
+   .updated-note                   : 取得日時などの補足表示
+   見た目が近くても用途外のクラスを流用しない。
+   新しい用途には新しいクラスを足す。 */
+
 /* ─── Tab Bar ──────────────────────────────────────────────── */
 .tab-bar {
   display: flex;
@@ -353,6 +362,11 @@ body {
   gap: 16px;
   flex-wrap: wrap;
   margin-bottom: 4px;
+}
+
+.controls-row-secondary {
+  margin-top: 12px;
+  align-items: center;
 }
 
 /* ─── Table ────────────────────────────────────────────────── */
@@ -557,6 +571,38 @@ body {
 .segmented-control-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.filter-chip-bar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 16px;
+  border-radius: 20px;
+  border: 1.5px solid var(--border-tab);
+  background: var(--bg-tab);
+  color: var(--color-tab);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.filter-chip:hover { border-color: #666; }
+
+.filter-chip.active { font-weight: 600; }
+
+.updated-note {
+  margin-top: 12px;
+  font-size: 11px;
+  color: var(--color-footer);
+  text-align: right;
 }
 
 .standings-charts {

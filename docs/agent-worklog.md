@@ -1,5 +1,31 @@
 # Agent Worklog
 
+## 2026-07-14
+
+### Plan
+
+- Issue #38 対応。操作系UIのクラス命名ルールを文書化し、意味違いのクラス流用と重複inline styleを解消する。
+
+### Work Log
+
+- `src/App.css` の操作系セクション冒頭に命名ルールのコメントを追加した。
+  - `.tab-bar` / `.tab-btn`: 画面・カテゴリ切替のタブ専用
+  - `.control-select` / `.control-input` / `.control-button`: フォーム操作
+  - `.segmented-control(-btn)`: 表示モード等の排他切替
+  - `.filter-chip-bar` / `.filter-chip`: 複数選択フィルタ（checkbox チップ）
+  - `.updated-note`: 取得日時などの補足表示
+- `.filter-chip` / `.filter-chip-bar` を新設し、`PlayerStats.jsx` のチームフィルタの `.tab-btn` 流用を解消した。
+  - チームカラー（動的値）のみ inline style として残した。
+- `.controls-row-secondary` を追加し、`PlayerStats.jsx` の2段目操作行の inline style を置き換えた。
+- 3画面（`Standings` / `Schedule` / `PlayerStats`）で重複していた「取得日時」の inline style を `.updated-note` に統一した。
+
+### Verification
+
+- `npm run build` 成功。
+- `npm run dev` + headless chromium で `/stats/batting/central/2026` をスクショ確認。
+  - チップのチームカラー枠・操作行との高さ整列・取得日時の右寄せ表示を目視確認。
+- lint の6件（`Schedule.jsx` の react-hooks）は変更前から存在する既存問題（stash比較で確認）。
+
 ## 2026-07-03
 
 ### Plan

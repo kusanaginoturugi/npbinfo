@@ -360,7 +360,7 @@ export default function Standings({
             </p>
           )}
           {lastUpdated[cacheKey] && (
-            <div style={{ marginTop: '12px', fontSize: '11px', color: 'var(--color-footer)', textAlign: 'right' }}>
+            <div className="updated-note">
               取得日時: {formatTimestamp(lastUpdated[cacheKey])}
               {updateNote ? ` (npb.jp 反映: ${updateNote})` : ''}
             </div>

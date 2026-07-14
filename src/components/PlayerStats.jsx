@@ -343,7 +343,7 @@ export default function PlayerStats({
         )}
       </div>
 
-      <div className="controls-row" style={{ marginTop: '12px', alignItems: 'center' }}>
+      <div className="controls-row controls-row-secondary">
         <input
           type="search"
           value={playerNameFilter}
@@ -352,7 +352,7 @@ export default function PlayerStats({
           className="control-input"
           style={{ minWidth: '180px' }}
         />
-        <div className="tab-bar" style={{ marginBottom: 0 }}>
+        <div className="filter-chip-bar">
           {TEAM_FILTERS_BY_LEAGUE(league).map(team => {
             const selected = selectedTeams.includes(team);
             const bg = getTeamInfo(team)?.colors?.[0] ?? '#555';
@@ -360,12 +360,11 @@ export default function PlayerStats({
               ? { background: bg, color: getContrastColor(bg), borderColor: bg }
               : { color: bg, borderColor: bg };
             return (
-              <label key={team} className={`tab-btn ${selected ? 'active' : ''}`} style={style}>
+              <label key={team} className={`filter-chip ${selected ? 'active' : ''}`} style={style}>
                 <input
                   type="checkbox"
                   checked={selected}
                   onChange={() => toggleTeamFilter(team)}
-                  style={{ marginRight: '4px' }}
                 />
                 {team}
               </label>
@@ -397,7 +396,7 @@ export default function PlayerStats({
             onSort={handleSort}
           />
           {lastUpdated[cacheKey] && (
-            <div style={{ marginTop: '12px', fontSize: '11px', color: 'var(--color-footer)', textAlign: 'right' }}>
+            <div className="updated-note">
               取得日時: {formatTimestamp(lastUpdated[cacheKey])}
               {updateNote ? ` (npb.jp 反映: ${updateNote})` : ''}
             </div>

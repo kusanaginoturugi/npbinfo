@@ -579,7 +579,7 @@ export default function Schedule({ initialMonth = CURRENT_MONTH, onMonthChange, 
           )}
 
           {lastUpdated[cacheKey] && (
-            <div style={{ marginTop: '12px', fontSize: '11px', color: 'var(--color-footer)', textAlign: 'right' }}>
+            <div className="updated-note">
               取得日時: {formatTimestamp(lastUpdated[cacheKey])}
             </div>
           )}
