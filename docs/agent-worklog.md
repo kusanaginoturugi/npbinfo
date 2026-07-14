@@ -42,6 +42,25 @@
 - headless chromium で `/teams/hanshin` をスクショ確認。
   - リーグ戦5球団・交流戦6球団、引き分けのパース（広島 6-5(1) → 6勝5敗1分 .545）を目視確認。
 
+### Work Log (3): チームページを12球団対応に拡張
+
+- `shared/teams.js` の各球団定義に `slug` を追加し、`getTeamBySlug()` を新設した。
+  - slug: `yakult` / `hanshin` / `giants` / `dena` / `hiroshima` / `chunichi` / `softbank` / `nipponham` / `rakuten` / `lotte` / `orix` / `seibu`
+  - 既存URL `/teams/hanshin` は互換維持。
+- `src/utils/routes.js` の `/teams/:slug` を全スラッグ対応にした。
+- `src/App.jsx` の `openTeam` から阪神ガードを外し、チーム名→slugで遷移するようにした。
+- `src/components/Standings.jsx` で順位表の全チーム名をクリック可能にした。
+- `src/components/TeamTimeline.jsx` を `teamSlug` prop対応にした。
+  - Xリスト（`X_LIST_URLS`）があるチーム（阪神・DeNA）だけ「関連ポスト」欄を表示。
+  - 他の10球団は対戦相手別 対戦成績のみ表示。
+
+### Verification (3)
+
+- `npm run build` / lint / `npm test`（9件）通過。
+  - lint既存問題（`Schedule.jsx` のreact-hooks、`shared/teams.js` の全角スペースregex）は変更前から存在（stash比較で確認）。
+- headless chromium で `/teams/softbank`（パ・リーグ側）と `/teams/hanshin` をスクショ確認。
+- 順位表DOMで `team-detail-link` が全6チームに付与されることを確認。
+
 ## 2026-07-03
 
 ### Plan

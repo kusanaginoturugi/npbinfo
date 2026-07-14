@@ -1,4 +1,5 @@
 import { STADIUMS } from '../data/stadiums.js';
+import { getTeamBySlug } from '../data/teams.js';
 
 const LEAGUE_TO_SLUG = {
   cl: 'central',
@@ -137,11 +138,11 @@ export function parseRoute(pathname) {
     };
   }
 
-  if (segments[0] === 'teams' && segments.length === 2 && segments[1] === 'hanshin') {
+  if (segments[0] === 'teams' && segments.length === 2 && getTeamBySlug(segments[1])) {
     return {
       tab: 'team',
-      team: 'hanshin',
-      path: teamPath('hanshin'),
+      team: segments[1],
+      path: teamPath(segments[1]),
     };
   }
 

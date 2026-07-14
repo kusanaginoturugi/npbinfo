@@ -4,6 +4,7 @@
 const TEAM_DEFINITIONS = [
   {
     shortName: 'ヤクルト',
+    slug: 'yakult',
     league: 'cl',
     code: 'S',
     ogpCode: 'YS',
@@ -14,6 +15,7 @@ const TEAM_DEFINITIONS = [
   },
   {
     shortName: '阪神',
+    slug: 'hanshin',
     league: 'cl',
     code: 'T',
     ogpCode: 'T',
@@ -24,6 +26,7 @@ const TEAM_DEFINITIONS = [
   },
   {
     shortName: '巨人',
+    slug: 'giants',
     league: 'cl',
     code: 'G',
     ogpCode: 'G',
@@ -34,6 +37,7 @@ const TEAM_DEFINITIONS = [
   },
   {
     shortName: 'DeNA',
+    slug: 'dena',
     league: 'cl',
     code: 'DB',
     ogpCode: 'DB',
@@ -44,6 +48,7 @@ const TEAM_DEFINITIONS = [
   },
   {
     shortName: '広島',
+    slug: 'hiroshima',
     league: 'cl',
     code: 'C',
     ogpCode: 'C',
@@ -54,6 +59,7 @@ const TEAM_DEFINITIONS = [
   },
   {
     shortName: '中日',
+    slug: 'chunichi',
     league: 'cl',
     code: 'D',
     ogpCode: 'D',
@@ -64,6 +70,7 @@ const TEAM_DEFINITIONS = [
   },
   {
     shortName: 'ソフトバンク',
+    slug: 'softbank',
     league: 'pl',
     code: 'H',
     ogpCode: 'H',
@@ -74,6 +81,7 @@ const TEAM_DEFINITIONS = [
   },
   {
     shortName: '日本ハム',
+    slug: 'nipponham',
     league: 'pl',
     code: 'F',
     ogpCode: 'F',
@@ -84,6 +92,7 @@ const TEAM_DEFINITIONS = [
   },
   {
     shortName: '楽天',
+    slug: 'rakuten',
     league: 'pl',
     code: 'E',
     ogpCode: 'E',
@@ -94,6 +103,7 @@ const TEAM_DEFINITIONS = [
   },
   {
     shortName: 'ロッテ',
+    slug: 'lotte',
     league: 'pl',
     code: 'M',
     ogpCode: 'M',
@@ -104,6 +114,7 @@ const TEAM_DEFINITIONS = [
   },
   {
     shortName: 'オリックス',
+    slug: 'orix',
     league: 'pl',
     code: 'B',
     ogpCode: 'B',
@@ -114,6 +125,7 @@ const TEAM_DEFINITIONS = [
   },
   {
     shortName: '西武',
+    slug: 'seibu',
     league: 'pl',
     code: 'L',
     ogpCode: 'L',
@@ -135,6 +147,7 @@ function toTeamInfo(team) {
     ogpCode: team.ogpCode,
     official: team.official,
     shortName: team.shortName,
+    slug: team.slug,
     colors: team.colors,
     colorNames: team.colorNames,
     aliases: team.aliases,
@@ -144,6 +157,11 @@ function toTeamInfo(team) {
 export const TEAMS = Object.fromEntries(
   TEAM_DEFINITIONS.map(team => [team.shortName, toTeamInfo(team)]),
 );
+
+export function getTeamBySlug(slug) {
+  const team = TEAM_DEFINITIONS.find(item => item.slug === slug);
+  return team ? TEAMS[team.shortName] : null;
+}
 
 export const TEAM_NAME_ALIASES = Object.fromEntries(
   TEAM_DEFINITIONS.flatMap(team => [

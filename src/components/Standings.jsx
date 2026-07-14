@@ -88,7 +88,7 @@ function StandingsTable({ data, isFavorite, toggleFavorite, onSelectTeam }) {
                     isFavorite={favorited} 
                     toggleFavorite={toggleFavorite} 
                   />
-                  {teamName === '阪神' ? (
+                  {teamInfo?.slug ? (
                     <button
                       type="button"
                       className="team-detail-link"

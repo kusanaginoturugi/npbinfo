@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { getContrastColor, getTeamInfo } from '../data/teams';
+import { getContrastColor, getTeamBySlug } from '../data/teams';
 import TeamHeadToHead from './TeamHeadToHead';
 
-const TIGERS_LIST_URL = 'https://x.com/kusanagiturugi/lists/2063091274643886176';
+// チーム別のX公式リスト。作成済みのチームだけ関連ポスト欄を表示する。
+const X_LIST_URLS = {
+  hanshin: 'https://x.com/kusanagiturugi/lists/2063091274643886176',
+  dena: 'https://x.com/i/lists/2063100139192111548',
+};
 const X_WIDGETS_URL = 'https://platform.x.com/widgets.js';
 
 function waitForXWidgets(timeoutMs = 10000) {
@@ -50,13 +54,14 @@ function loadXWidgets() {
   });
 }
 
-export default function TeamTimeline({ dark }) {
+export default function TeamTimeline({ teamSlug, dark }) {
   const timelineRef = useRef(null);
   const [loadFailed, setLoadFailed] = useState(false);
-  const team = getTeamInfo('阪神');
-  const teamColor = team.colors[0];
+  const team = getTeamBySlug(teamSlug);
+  const listUrl = X_LIST_URLS[teamSlug];
 
   useEffect(() => {
+    if (!listUrl) return undefined;
     let cancelled = false;
     let timeoutId;
     let observer;
@@ -102,7 +107,10 @@ export default function TeamTimeline({ dark }) {
       window.clearTimeout(timeoutId);
       observer?.disconnect();
     };
-  }, [dark]);
+  }, [dark, listUrl]);
+
+  if (!team) return null;
+  const teamColor = team.colors[0];
 
   return (
     <section className="section team-page">
@@ -119,28 +127,32 @@ export default function TeamTimeline({ dark }) {
         </div>
       </div>
 
-      <TeamHeadToHead teamName="阪神" year={new Date().getFullYear()} />
+      <TeamHeadToHead teamName={team.shortName} year={new Date().getFullYear()} />
 
-      <h3 className="team-page-block-title">関連ポスト</h3>
-      <div className="team-timeline" ref={timelineRef}>
-        <a
-          className="twitter-timeline"
-          data-height="760"
-          data-theme={dark ? 'dark' : 'light'}
-          data-chrome="noheader nofooter"
-          href={TIGERS_LIST_URL}
-        >
-          阪神関連ポストをXで見る
-        </a>
-      </div>
+      {listUrl && (
+        <>
+          <h3 className="team-page-block-title">関連ポスト</h3>
+          <div className="team-timeline" ref={timelineRef}>
+            <a
+              className="twitter-timeline"
+              data-height="760"
+              data-theme={dark ? 'dark' : 'light'}
+              data-chrome="noheader nofooter"
+              href={listUrl}
+            >
+              {team.shortName}関連ポストをXで見る
+            </a>
+          </div>
 
-      {loadFailed && (
-        <div className="status-msg">
-          Xの埋め込みを読み込めませんでした。{' '}
-          <a href={TIGERS_LIST_URL} target="_blank" rel="noreferrer">
-            Xでリストを開く
-          </a>
-        </div>
+          {loadFailed && (
+            <div className="status-msg">
+              Xの埋め込みを読み込めませんでした。{' '}
+              <a href={listUrl} target="_blank" rel="noreferrer">
+                Xでリストを開く
+              </a>
+            </div>
+          )}
+        </>
       )}
     </section>
   );

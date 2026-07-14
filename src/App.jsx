@@ -7,6 +7,7 @@ import TeamTimeline from './components/TeamTimeline';
 import Threads from './components/Threads';
 import HomeRunParkFactorMethod from './components/HomeRunParkFactorMethod';
 import { getBuildInfo, isDebugMode, syncDebugFromUrl, withNoCache } from './utils/debug';
+import { getTeamInfo } from './data/teams';
 import {
   defaultRoute,
   parseRoute,
@@ -124,8 +125,9 @@ export default function App() {
   };
 
   const openTeam = (team) => {
-    if (team !== '阪神') return;
-    navigate({ tab: 'team', team: 'hanshin', path: teamPath('hanshin') });
+    const slug = getTeamInfo(team)?.slug;
+    if (!slug) return;
+    navigate({ tab: 'team', team: slug, path: teamPath(slug) });
   };
 
   return (
@@ -233,8 +235,12 @@ export default function App() {
         {route.tab === 'threads' && (
           <Threads key={route.path} />
         )}
-        {route.tab === 'team' && route.team === 'hanshin' && (
-          <TeamTimeline key={`${route.path}-${dark ? 'dark' : 'light'}`} dark={dark} />
+        {route.tab === 'team' && route.team && (
+          <TeamTimeline
+            key={`${route.path}-${dark ? 'dark' : 'light'}`}
+            teamSlug={route.team}
+            dark={dark}
+          />
         )}
         {route.tab === 'methodology' && route.method === 'home-run-park-factor' && (
           <HomeRunParkFactorMethod

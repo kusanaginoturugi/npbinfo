@@ -1,6 +1,7 @@
 export {
   TEAMS,
   getContrastColor,
+  getTeamBySlug,
   getTeamInfo,
   getTeamLeague,
   normalizeTeamName,
