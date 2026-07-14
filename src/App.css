@@ -482,6 +482,39 @@ body {
   font-size: 13px;
 }
 
+.team-page-block-title {
+  margin: 20px 0 10px;
+  color: var(--color-heading);
+  font-size: 15px;
+}
+
+.h2h-tables {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.h2h-table {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+
+.h2h-table-title {
+  margin: 0 0 6px;
+  color: var(--color-status);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.h2h-dot {
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
 .team-timeline {
   min-height: 520px;
 }

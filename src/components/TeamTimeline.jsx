@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { getContrastColor, getTeamInfo } from '../data/teams';
+import TeamHeadToHead from './TeamHeadToHead';
 
 const TIGERS_LIST_URL = 'https://x.com/kusanagiturugi/lists/2063091274643886176';
 const X_WIDGETS_URL = 'https://platform.x.com/widgets.js';
@@ -114,10 +115,13 @@ export default function TeamTimeline({ dark }) {
         </span>
         <div>
           <h2 className="section-title">{team.official}</h2>
-          <p className="team-page-subtitle">阪神関連ポスト</p>
+          <p className="team-page-subtitle">チーム情報</p>
         </div>
       </div>
 
+      <TeamHeadToHead teamName="阪神" year={new Date().getFullYear()} />
+
+      <h3 className="team-page-block-title">関連ポスト</h3>
       <div className="team-timeline" ref={timelineRef}>
         <a
           className="twitter-timeline"

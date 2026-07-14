@@ -26,6 +26,22 @@
   - チップのチームカラー枠・操作行との高さ整列・取得日時の右寄せ表示を目視確認。
 - lint の6件（`Schedule.jsx` の react-hooks）は変更前から存在する既存問題（stash比較で確認）。
 
+### Work Log (2): チームページに対戦相手別 対戦成績を追加
+
+- `src/components/TeamHeadToHead.jsx` を新規作成した。
+  - 既存の `/api/headtohead/:league?year=` からデータを取得（新API追加なし）。
+  - `9-5` / `6-5(1)` 形式（勝-敗(分)）をパースし、リーグ戦・交流戦の2テーブルで勝・敗・分・勝率を表示。
+- `TeamTimeline.jsx` の見出し直下に `TeamHeadToHead` を配置した。
+  - ページ構成は「対戦成績 → 関連ポスト」。サブタイトルを「チーム情報」に変更。
+- `App.css` に `.team-page-block-title` / `.h2h-tables` / `.h2h-table(-title)` / `.h2h-dot` を追加。
+  - テーブル本体は `.standings-table` を再利用。チームカラーのみ inline style。
+
+### Verification (2)
+
+- `npm run build` / lint 通過。
+- headless chromium で `/teams/hanshin` をスクショ確認。
+  - リーグ戦5球団・交流戦6球団、引き分けのパース（広島 6-5(1) → 6勝5敗1分 .545）を目視確認。
+
 ## 2026-07-03
 
 ### Plan
