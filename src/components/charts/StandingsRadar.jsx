@@ -1,4 +1,4 @@
-import { getTeamInfo } from '../../data/teams';
+import { getTeamInfo, getTeamPipingColors } from '../../data/teams';
 
 const METRICS = [
   { key: 'pct', label: '勝率', getValue: (team) => team.pct },
@@ -72,12 +72,20 @@ function buildSeries(teams) {
     return {
       key: team.name,
       color: info?.colors?.[0] ?? '#64748b',
+      piping: getTeamPipingColors(team.name),
       code: info?.code ?? team.name,
       scores: METRICS.map((metric) => (
         scaleRelative(metric.getValue(team), ranges[metric.key], metric.lowerBetter)
       )),
     };
   });
+}
+
+function pipingVars(piping) {
+  return {
+    '--pipe-light': piping.light ?? 'transparent',
+    '--pipe-dark': piping.dark ?? 'transparent',
+  };
 }
 
 export default function StandingsRadar({ teams }) {
@@ -130,15 +138,24 @@ export default function StandingsRadar({ teams }) {
               const points = team.scores.map((score, index) => (
                 pointOnRadar(cx, cy, radius * (score / 100), index, METRICS.length)
               ));
+              const path = pointsToPath(points);
               return (
-                <polygon
-                  key={team.key}
-                  className="radar-team-area"
-                  points={pointsToPath(points)}
-                  style={{ '--team-color': team.color }}
-                >
-                  <title>{`${team.code}: ${team.scores.map((score, index) => `${METRICS[index].label} ${score.toFixed(1)}`).join(' / ')}`}</title>
-                </polygon>
+                <g key={team.key}>
+                  {(team.piping.light || team.piping.dark) && (
+                    <polygon
+                      className="radar-team-pipe"
+                      points={path}
+                      style={pipingVars(team.piping)}
+                    />
+                  )}
+                  <polygon
+                    className="radar-team-area"
+                    points={path}
+                    style={{ '--team-color': team.color }}
+                  >
+                    <title>{`${team.code}: ${team.scores.map((score, index) => `${METRICS[index].label} ${score.toFixed(1)}`).join(' / ')}`}</title>
+                  </polygon>
+                </g>
               );
             })}
           </g>
@@ -147,7 +164,10 @@ export default function StandingsRadar({ teams }) {
       <div className="chart-legend" aria-label="凡例">
         {series.map((team) => (
           <span key={team.key} className="chart-legend-item">
-            <span className="chart-legend-swatch" style={{ background: team.color }} />
+            <span
+              className="chart-legend-swatch"
+              style={{ background: team.color, ...pipingVars(team.piping) }}
+            />
             {team.code}
           </span>
         ))}

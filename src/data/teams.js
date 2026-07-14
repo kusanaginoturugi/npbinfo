@@ -4,5 +4,6 @@ export {
   getTeamBySlug,
   getTeamInfo,
   getTeamLeague,
+  getTeamPipingColors,
   normalizeTeamName,
 } from '../../shared/teams.js';

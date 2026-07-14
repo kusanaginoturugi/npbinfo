@@ -712,11 +712,25 @@ body {
   font-weight: 600;
 }
 
+/* 主色が暗く重複するチーム（パ・リーグの黒系）を輪郭で判別するため、
+   二色目をユニフォームのパイピングのように外側の縁として描く */
+.radar-team-pipe {
+  fill: none;
+  stroke: var(--pipe-light, transparent);
+  stroke-width: 5.5;
+  stroke-linejoin: round;
+}
+
+[data-theme="dark"] .radar-team-pipe {
+  stroke: var(--pipe-dark, transparent);
+}
+
 .radar-team-area {
   fill: var(--team-color);
   fill-opacity: 0.16;
   stroke: var(--team-color);
-  stroke-width: 2;
+  stroke-width: 2.5;
+  stroke-linejoin: round;
 }
 
 .chart-legend {
@@ -735,10 +749,15 @@ body {
 }
 
 .chart-legend-swatch {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
   border-radius: 50%;
-  border: 1px solid rgba(0,0,0,0.12);
+  border: 2.5px solid var(--pipe-light, rgba(0,0,0,0.12));
+}
+
+[data-theme="dark"] .chart-legend-swatch {
+  border-color: var(--pipe-dark, rgba(255,255,255,0.18));
 }
 
 .bar-chart-list {
@@ -790,7 +809,13 @@ body {
 .bar-chart-fill {
   display: block;
   height: 100%;
+  box-sizing: border-box;
+  border: 1.5px solid var(--pipe-light, transparent);
   border-radius: 4px;
+}
+
+[data-theme="dark"] .bar-chart-fill {
+  border-color: var(--pipe-dark, transparent);
 }
 
 .bar-chart-value {

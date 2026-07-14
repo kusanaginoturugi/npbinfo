@@ -216,12 +216,25 @@ export function getTeamOgpCode(name) {
   return getTeamInfoByPartialName(name)?.ogpCode ?? String(name ?? '').slice(0, 3).toUpperCase();
 }
 
-// 背景色の明るさに応じて読みやすい文字色を返す
-export function getContrastColor(hex) {
+function hexLuminance(hex) {
   const c = hex.replace('#', '');
   const r = parseInt(c.substring(0, 2), 16);
   const g = parseInt(c.substring(2, 4), 16);
   const b = parseInt(c.substring(4, 6), 16);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.6 ? '#1A1A2E' : '#FFFFFF';
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
+// 背景色の明るさに応じて読みやすい文字色を返す
+export function getContrastColor(hex) {
+  return hexLuminance(hex) > 0.6 ? '#1A1A2E' : '#FFFFFF';
+}
+
+// グラフの縁取り用に、二色目以降から背景と十分なコントラストを持つ色を
+// テーマ別に選ぶ。該当色が無いチームは null（縁なし自体が識別子になる）。
+export function getTeamPipingColors(name) {
+  const subColors = getTeamInfoByPartialName(name)?.colors?.slice(1) ?? [];
+  return {
+    light: subColors.find(hex => hexLuminance(hex) < 0.82) ?? null,
+    dark: subColors.find(hex => hexLuminance(hex) > 0.35) ?? null,
+  };
 }

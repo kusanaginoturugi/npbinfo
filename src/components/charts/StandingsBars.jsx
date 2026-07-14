@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { getTeamInfo } from '../../data/teams';
+import { getTeamInfo, getTeamPipingColors } from '../../data/teams';
 
 const METRICS = [
   { key: 'ops', label: 'OPS', parse: (v) => Number.parseFloat(v), higherBetter: true, format: (v) => Number(v).toFixed(3) },
@@ -15,10 +15,15 @@ function buildRows(teams, metric) {
       const value = metric.parse(String(team[metric.key] ?? '').replace('%', ''));
       if (!Number.isFinite(value)) return null;
       const info = getTeamInfo(team.name);
+      const piping = getTeamPipingColors(team.name);
       return {
         name: team.name,
         code: info?.code ?? team.name,
         color: info?.colors?.[0] ?? '#64748b',
+        pipingStyle: {
+          '--pipe-light': piping.light ?? 'transparent',
+          '--pipe-dark': piping.dark ?? 'transparent',
+        },
         value,
       };
     })
@@ -65,7 +70,7 @@ export default function StandingsBars({ teams }) {
               <div className="bar-chart-track">
                 <span
                   className="bar-chart-fill"
-                  style={{ width: `${width}%`, background: row.color }}
+                  style={{ width: `${width}%`, background: row.color, ...row.pipingStyle }}
                   title={`${row.name}: ${metric.format(row.value)}`}
                 />
               </div>
