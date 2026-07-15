@@ -13,6 +13,8 @@
 #   YEAR            既定 今年
 #   LLM_SLEEP       各リクエスト間の待ち秒数（無料枠のレート制限対策）。既定 5
 #   TEAMS           生成対象を空白区切りのチーム名で絞る（例: TEAMS="日本ハム 楽天"）。既定は全チーム
+#   LLM_TEMPERATURE 生成温度（0〜2）。未指定なら API 既定値。上げると文章は自由になるが脱線リスクも上がる
+#   SYSTEM_PROMPT   システムプロンプトの上書き。口調や遊びを変えたいときはこちらを推奨
 set -eu
 
 : "${LLM_API_KEY:?LLM_API_KEY を設定してください}"
@@ -25,7 +27,7 @@ NPBINFO_BASE_URL="${NPBINFO_BASE_URL:-https://npbinfo.kusanaginoturugi.workers.d
 YEAR="${YEAR:-$(date +%Y)}"
 LLM_SLEEP="${LLM_SLEEP:-5}"
 
-SYSTEM_PROMPT='あなたはプロ野球の解説者です。与えられた成績データだけを根拠に、対象チームの現在の調子を日本語200字程度で解説してください。データに含まれない事実（個別の選手名、怪我、直近の試合展開など）は書かないでください。リーグ内での相対的な位置づけ（打撃・投手・守備の強み弱み）に触れてください。文体はです・ます調。出力はコメント本文のみ。'
+SYSTEM_PROMPT="${SYSTEM_PROMPT:-あなたはプロ野球の解説者です。与えられた成績データだけを根拠に、対象チームの現在の調子を日本語200字程度で解説してください。データに含まれない事実（個別の選手名、怪我、直近の試合展開など）は書かないでください。リーグ内での相対的な位置づけ（打撃・投手・守備の強み弱み）に触れてください。文体はです・ます調。出力はコメント本文のみ。}"
 
 # shared/teams.js の shortName → slug 対応
 slug_for() {
@@ -58,7 +60,9 @@ generate_comment() {
       --arg model "$LLM_MODEL" \
       --arg system "$SYSTEM_PROMPT" \
       --arg user "$prompt" \
-      '{model: $model, messages: [{role: "system", content: $system}, {role: "user", content: $user}]}' \
+      --arg temp "${LLM_TEMPERATURE:-}" \
+      '{model: $model, messages: [{role: "system", content: $system}, {role: "user", content: $user}]}
+       + (if $temp != "" then {temperature: ($temp | tonumber)} else {} end)' \
       | curl -sS "$LLM_BASE_URL/chat/completions" \
           -H "Authorization: Bearer $LLM_API_KEY" \
           -H 'Content-Type: application/json' \

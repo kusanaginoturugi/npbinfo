@@ -55,7 +55,7 @@ function loadXWidgets() {
   });
 }
 
-export default function TeamTimeline({ teamSlug, dark }) {
+export default function TeamTimeline({ teamSlug, dark, onSelectTeam }) {
   const timelineRef = useRef(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const team = getTeamBySlug(teamSlug);
@@ -130,7 +130,11 @@ export default function TeamTimeline({ teamSlug, dark }) {
 
       <TeamAiComment teamSlug={teamSlug} />
 
-      <TeamHeadToHead teamName={team.shortName} year={new Date().getFullYear()} />
+      <TeamHeadToHead
+        teamName={team.shortName}
+        year={new Date().getFullYear()}
+        onSelectTeam={onSelectTeam}
+      />
 
       {listUrl && (
         <>

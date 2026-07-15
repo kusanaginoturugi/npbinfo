@@ -240,6 +240,7 @@ export default function App() {
             key={`${route.path}-${dark ? 'dark' : 'light'}`}
             teamSlug={route.team}
             dark={dark}
+            onSelectTeam={openTeam}
           />
         )}
         {route.tab === 'methodology' && route.method === 'home-run-park-factor' && (

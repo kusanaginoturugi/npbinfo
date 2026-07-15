@@ -16,7 +16,7 @@ function formatPct(win, lose) {
   return (win / (win + lose)).toFixed(3).replace(/^0/, '');
 }
 
-function RecordTable({ title, records }) {
+function RecordTable({ title, records, onSelectTeam }) {
   const rows = Object.entries(records ?? {});
   if (!rows.length) return null;
 
@@ -37,12 +37,26 @@ function RecordTable({ title, records }) {
           <tbody>
             {rows.map(([opponent, value], i) => {
               const record = parseRecord(value);
-              const color = getTeamInfo(opponent)?.colors?.[0] ?? '#555';
+              const info = getTeamInfo(opponent);
+              const color = info?.colors?.[0] ?? '#555';
               return (
                 <tr key={opponent} className={i % 2 === 0 ? 'row-even' : 'row-odd'}>
                   <td className="team-cell">
-                    <span className="team-color-dot" style={{ background: color }} />
-                    {opponent}
+                    {info?.slug && onSelectTeam ? (
+                      <button
+                        type="button"
+                        className="team-detail-link"
+                        onClick={() => onSelectTeam(opponent)}
+                      >
+                        <span className="team-color-dot" style={{ background: color }} />
+                        <span>{opponent}</span>
+                      </button>
+                    ) : (
+                      <>
+                        <span className="team-color-dot" style={{ background: color }} />
+                        {opponent}
+                      </>
+                    )}
                   </td>
                   {record ? (
                     <>
@@ -64,7 +78,7 @@ function RecordTable({ title, records }) {
   );
 }
 
-export default function TeamHeadToHead({ teamName, year }) {
+export default function TeamHeadToHead({ teamName, year, onSelectTeam }) {
   const [state, setState] = useState({ loading: true, error: null, data: null });
 
   useEffect(() => {
@@ -104,8 +118,8 @@ export default function TeamHeadToHead({ teamName, year }) {
       )}
       {team && (
         <div className="h2h-tables">
-          <RecordTable title="リーグ戦" records={team.vs} />
-          <RecordTable title="交流戦" records={team.interleague} />
+          <RecordTable title="リーグ戦" records={team.vs} onSelectTeam={onSelectTeam} />
+          <RecordTable title="交流戦" records={team.interleague} onSelectTeam={onSelectTeam} />
         </div>
       )}
     </div>

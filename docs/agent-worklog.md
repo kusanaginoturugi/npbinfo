@@ -147,6 +147,21 @@
   - `npbinfo-ai-comments.service` / `.timer` / `ai-comments.env.example` の3ファイル。
   - シークレットはリポジトリ外の `~/.config/npbinfo/ai-comments.env`（600）から `EnvironmentFile` で読む。
   - ユーザーのマシンには units コピー・`daemon-reload`・env 雛形設置まで実施済み。キー記入と `systemctl --user enable --now npbinfo-ai-comments.timer` はユーザー側で行う。
+
+### Work Log (8): 対戦成績のチーム名リンク + 生成パラメータの調整口
+
+- 対戦成績テーブルの対戦相手名をチームページへのリンクにした（ユーザー要望）。
+  - `App.jsx` の `openTeam` を `TeamTimeline` → `TeamHeadToHead` に prop で通し、順位表と同じ `.team-detail-link` パターンで実装。
+  - slug が無いチーム名や prop 未指定時は従来どおりプレーンテキスト表示。
+- `scripts/generate-ai-comments.sh` に生成の調整口を追加（ユーザーの「遊びを入れられるか」質問への対応）。
+  - `LLM_TEMPERATURE`: 未指定なら payload に含めず API 既定値。指定時のみ `temperature` を付与。
+  - `SYSTEM_PROMPT`: 環境変数で上書き可能に。口調・遊びの調整は temperature より system prompt 推奨（脱線リスクが低い）。
+  - `systemd/ai-comments.env.example` にも両方を追記。
+
+### Verification (8)
+
+- `npm run build` / lint（対象3ファイル）通過。`sh -n` と temperature payload の jq 分岐（指定あり/なし）を単体確認。
+- playwright で `/teams/hanshin` の対戦相手リンク11件を確認、「巨人」クリックで `/teams/giants` に遷移し見出しが切り替わることを確認。スタイル崩れなしをスクショ確認。
 - 本番 `REFRESH_TOKEN` secret は設定済みであることを確認（新規 secret 不要）。
 - デプロイ時の追加手順: `npx wrangler d1 migrations apply npbinfo-db --remote`。
 
