@@ -14,11 +14,20 @@
 #   LLM_SLEEP       各リクエスト間の待ち秒数（無料枠のレート制限対策）。既定 5
 #   TEAMS           生成対象を空白区切りのチーム名で絞る（例: TEAMS="日本ハム 楽天"）。既定は全チーム
 #   LLM_TEMPERATURE 生成温度（0〜2）。未指定なら API 既定値。上げると文章は自由になるが脱線リスクも上がる
-#   SYSTEM_PROMPT   システムプロンプトの上書き。口調や遊びを変えたいときはこちらを推奨
+#   PROMPTS_DIR     プロンプト置き場。既定はリポジトリの prompts/
+#   SYSTEM_PROMPT   システムプロンプト全体の上書き（キャラ設定+共通ルールの合成を無視する）
+#   DRY_RUN         1 にすると LLM 呼び出しと push をせず、合成したプロンプトを表示するだけ
+#
+# システムプロンプトは「キャラ設定 + 共通ルール」の合成:
+#   prompts/personas/<slug>.txt  チームごとのコメンテーターのキャラ設定（無ければ既定の解説者）
+#   prompts/common.txt           全チーム共通のルール
 set -eu
 
-: "${LLM_API_KEY:?LLM_API_KEY を設定してください}"
-: "${REFRESH_TOKEN:?REFRESH_TOKEN を設定してください}"
+DRY_RUN="${DRY_RUN:-}"
+if [ -z "$DRY_RUN" ]; then
+  : "${LLM_API_KEY:?LLM_API_KEY を設定してください}"
+  : "${REFRESH_TOKEN:?REFRESH_TOKEN を設定してください}"
+fi
 LLM_BASE_URL="${LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}"
 # 注意: Gemini は古いモデルを新規ユーザーに順次閉じる。使えなくなったら
 # /v1beta/openai/models で一覧を確認して差し替える（models/ プレフィックス必須）。
@@ -27,7 +36,27 @@ NPBINFO_BASE_URL="${NPBINFO_BASE_URL:-https://npbinfo.kusanaginoturugi.workers.d
 YEAR="${YEAR:-$(date +%Y)}"
 LLM_SLEEP="${LLM_SLEEP:-5}"
 
-SYSTEM_PROMPT="${SYSTEM_PROMPT:-あなたはプロ野球の解説者です。与えられた成績データだけを根拠に、対象チームの現在の調子を日本語200字程度で解説してください。データに含まれない事実（個別の選手名、怪我、直近の試合展開など）は書かないでください。リーグ内での相対的な位置づけ（打撃・投手・守備の強み弱み）に触れてください。文体はです・ます調。出力はコメント本文のみ。}"
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+PROMPTS_DIR="${PROMPTS_DIR:-$SCRIPT_DIR/../prompts}"
+COMMON_PROMPT=$(cat "$PROMPTS_DIR/common.txt")
+DEFAULT_PERSONA='あなたはプロ野球の解説者です。文体はです・ます調。'
+
+# キャラ設定（personas/<slug>.txt）と共通ルール（common.txt）を合成する。
+# SYSTEM_PROMPT が指定されていれば合成せずそれを使う。
+system_prompt_for() {
+  slug=$1
+  if [ -n "${SYSTEM_PROMPT:-}" ]; then
+    printf '%s' "$SYSTEM_PROMPT"
+    return
+  fi
+  persona_file="$PROMPTS_DIR/personas/$slug.txt"
+  if [ -f "$persona_file" ]; then
+    persona=$(cat "$persona_file")
+  else
+    persona=$DEFAULT_PERSONA
+  fi
+  printf '%s\n%s' "$persona" "$COMMON_PROMPT"
+}
 
 # shared/teams.js の shortName → slug 対応
 slug_for() {
@@ -53,12 +82,13 @@ league_label() {
 }
 
 generate_comment() {
-  prompt=$1
+  system=$1
+  prompt=$2
   attempt=1
   while :; do
     response=$(jq -n \
       --arg model "$LLM_MODEL" \
-      --arg system "$SYSTEM_PROMPT" \
+      --arg system "$system" \
       --arg user "$prompt" \
       --arg temp "${LLM_TEMPERATURE:-}" \
       '{model: $model, messages: [{role: "system", content: $system}, {role: "user", content: $user}]}
@@ -119,9 +149,17 @@ for league in cl pl; do
       continue
     fi
 
+    system=$(system_prompt_for "$slug")
     prompt=$(printf '%s年 %s の順位表:\n\n%s\n\n対象チーム: %s' \
       "$YEAR" "$(league_label "$league")" "$table" "$name")
-    content=$(generate_comment "$prompt" || true)
+
+    if [ -n "$DRY_RUN" ]; then
+      printf '===== %s (%s) =====\n--- system ---\n%s\n--- user ---\n%s\n\n' \
+        "$name" "$slug" "$system" "$prompt"
+      continue
+    fi
+
+    content=$(generate_comment "$system" "$prompt" || true)
     if [ -z "$content" ]; then
       echo "error: $name の生成に失敗" >&2
       sleep "$LLM_SLEEP"
