@@ -119,8 +119,8 @@ async function updateAdjustedHomeRuns(env, year, maxDetails = MAX_DETAILS, reque
   };
   await env.CACHE.put(key, JSON.stringify(data));
   await Promise.all([
-    env.CACHE.delete(`standings:v5:cl:${year}`),
-    env.CACHE.delete(`standings:v5:pl:${year}`),
+    env.CACHE.delete(`standings:v6:cl:${year}`),
+    env.CACHE.delete(`standings:v6:pl:${year}`),
   ]);
   return {
     year,

@@ -1,7 +1,7 @@
 import { getTeamInfo, getTeamPipingColors } from '../../data/teams';
 
 const METRICS = [
-  { key: 'pct', label: '勝率', getValue: (team) => team.pct },
+  { key: 'fieldingPct', label: '守備率', getValue: (team) => team.fieldingPct },
   { key: 'ops', label: 'OPS', getValue: (team) => team.ops },
   { key: 'hrAdjusted', label: '本塁打(補正)', getValue: (team) => team.hrAdjusted },
   { key: 'sb', label: '盗塁', getValue: (team) => team.sb },
@@ -31,8 +31,8 @@ function pointsToPath(points) {
   return points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
 }
 
-function buildMetricRanges(values) {
-  return Object.fromEntries(METRICS.map((metric) => {
+function buildMetricRanges(values, metrics) {
+  return Object.fromEntries(metrics.map((metric) => {
     const metricValues = values.map(metric.getValue);
     return [metric.key, {
       min: Math.min(...metricValues),
@@ -51,34 +51,38 @@ function scaleRelative(value, range, lowerBetter = false) {
 }
 
 function buildSeries(teams) {
-  const values = teams
-    .map((team) => ({
-      name: team.name,
-      pct: parseNumber(team.pct),
-      ops: parseNumber(team.ops),
-      hrAdjusted: parseNumber(team.hrAdjusted),
-      sb: parseNumber(team.sb),
-      era: parseNumber(team.era),
-      derApprox: parseNumber(team.derApprox),
-    }))
-    .filter(team => METRICS.every(metric => metric.getValue(team) !== null));
+  const values = teams.map((team) => ({
+    name: team.name,
+    fieldingPct: parseNumber(team.fieldingPct),
+    ops: parseNumber(team.ops),
+    hrAdjusted: parseNumber(team.hrAdjusted),
+    sb: parseNumber(team.sb),
+    era: parseNumber(team.era),
+    derApprox: parseNumber(team.derApprox),
+  }));
 
-  if (!values.length) return [];
+  // 全チームで値が揃う指標だけ軸にする（過去年キャッシュに無い指標は落とす）
+  const metrics = values.length
+    ? METRICS.filter(metric => values.every(team => metric.getValue(team) !== null))
+    : [];
+  if (metrics.length < 3) return { metrics: [], series: [] };
 
-  const ranges = buildMetricRanges(values);
+  const ranges = buildMetricRanges(values, metrics);
 
-  return values.map((team) => {
+  const series = values.map((team) => {
     const info = getTeamInfo(team.name);
     return {
       key: team.name,
       color: info?.colors?.[0] ?? '#64748b',
       piping: getTeamPipingColors(team.name),
       code: info?.code ?? team.name,
-      scores: METRICS.map((metric) => (
+      scores: metrics.map((metric) => (
         scaleRelative(metric.getValue(team), ranges[metric.key], metric.lowerBetter)
       )),
     };
   });
+
+  return { metrics, series };
 }
 
 function pipingVars(piping) {
@@ -89,7 +93,7 @@ function pipingVars(piping) {
 }
 
 export default function StandingsRadar({ teams }) {
-  const series = buildSeries(teams);
+  const { metrics, series } = buildSeries(teams);
   if (!series.length) {
     return <div className="status-msg">グラフ用データが不足しています</div>;
   }
@@ -100,7 +104,7 @@ export default function StandingsRadar({ teams }) {
   const cy = 202;
   const radius = 128;
   const rings = [20, 40, 60, 80, 100];
-  const axisPoints = METRICS.map((_, index) => pointOnRadar(cx, cy, radius, index, METRICS.length));
+  const axisPoints = metrics.map((_, index) => pointOnRadar(cx, cy, radius, index, metrics.length));
 
   return (
     <div className="chart-card">
@@ -114,18 +118,18 @@ export default function StandingsRadar({ teams }) {
         >
           <g className="radar-grid">
             {rings.map((ring) => {
-              const ringPoints = METRICS.map((_, index) => (
-                pointOnRadar(cx, cy, radius * (ring / 100), index, METRICS.length)
+              const ringPoints = metrics.map((_, index) => (
+                pointOnRadar(cx, cy, radius * (ring / 100), index, metrics.length)
               ));
               return <polygon key={ring} points={pointsToPath(ringPoints)} />;
             })}
             {axisPoints.map((point, index) => (
-              <line key={METRICS[index].key} x1={cx} y1={cy} x2={point.x} y2={point.y} />
+              <line key={metrics[index].key} x1={cx} y1={cy} x2={point.x} y2={point.y} />
             ))}
           </g>
           <g className="radar-labels">
-            {METRICS.map((metric, index) => {
-              const point = pointOnRadar(cx, cy, radius + 34, index, METRICS.length);
+            {metrics.map((metric, index) => {
+              const point = pointOnRadar(cx, cy, radius + 34, index, metrics.length);
               return (
                 <text key={metric.key} x={point.x} y={point.y} textAnchor="middle" dominantBaseline="middle">
                   {metric.label}
@@ -136,7 +140,7 @@ export default function StandingsRadar({ teams }) {
           <g>
             {series.map((team) => {
               const points = team.scores.map((score, index) => (
-                pointOnRadar(cx, cy, radius * (score / 100), index, METRICS.length)
+                pointOnRadar(cx, cy, radius * (score / 100), index, metrics.length)
               ));
               const path = pointsToPath(points);
               return (
@@ -153,7 +157,7 @@ export default function StandingsRadar({ teams }) {
                     points={path}
                     style={{ '--team-color': team.color }}
                   >
-                    <title>{`${team.code}: ${team.scores.map((score, index) => `${METRICS[index].label} ${score.toFixed(1)}`).join(' / ')}`}</title>
+                    <title>{`${team.code}: ${team.scores.map((score, index) => `${metrics[index].label} ${score.toFixed(1)}`).join(' / ')}`}</title>
                   </polygon>
                 </g>
               );

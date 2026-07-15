@@ -437,7 +437,7 @@ function calculateApproxDer(stats) {
   return formatRate(1 - (nonHomeRunHits / ballsInPlay));
 }
 
-async function collectStandingsTeams(source, teams, battingStats, pitchingStats) {
+async function collectStandingsTeams(source, teams, battingStats, pitchingStats, fieldingStats) {
   await collectTableRows(source, {
     tableClassNames: ['tablefix2', 'stdtblSubmain'],
     normalizeCell: value => String(value ?? '').replace(/\s+/g, ' ').trim(),
@@ -455,12 +455,14 @@ async function collectStandingsTeams(source, teams, battingStats, pitchingStats)
       // 追加成績をマージ
       const bStats = battingStats[team.name] || {};
       const pStats = pitchingStats[team.name] || {};
+      const fStats = fieldingStats?.[team.name] || {};
       team.avg = bStats.avg || '-';
       team.hr = bStats.hr || '-';
       team.sb = bStats.sb || '-';
       team.ops = bStats.ops || '-';
       team.era = pStats.era || '-';
       team.derApprox = calculateApproxDer(pStats);
+      team.fieldingPct = fStats.fieldingPct || '-';
 
       // 重複チェック（交流戦テーブルなどが続く場合があるため）
       if (!teams.some(t => t.name === team.name)) {
@@ -659,17 +661,19 @@ async function buildStandingsData(league, year, request, env) {
   const stdUrl = `https://npb.jp/bis/${year}/stats/std_${leagueCode}.html`;
   const tmbUrl = `https://npb.jp/bis/${year}/stats/tmb_${leagueCode}.html`;
   const tmpUrl = `https://npb.jp/bis/${year}/stats/tmp_${leagueCode}.html`;
+  const tmfUrl = `https://npb.jp/bis/${year}/stats/tmf_${leagueCode}.html`;
 
-  const [stdRes, tmbRes, tmpRes] = await Promise.all([
+  const [stdRes, tmbRes, tmpRes, tmfRes] = await Promise.all([
     fetch(stdUrl, { headers: { 'User-Agent': UA } }),
     fetch(tmbUrl, { headers: { 'User-Agent': UA } }),
     fetch(tmpUrl, { headers: { 'User-Agent': UA } }),
+    fetch(tmfUrl, { headers: { 'User-Agent': UA } }),
   ]);
 
   if (!stdRes.ok) throw new Error(`npb.jp (std) returned ${stdRes.status}`);
 
   const isLegacy = year <= 2024;
-  const [battingStats, pitchingStats] = await Promise.all([
+  const [battingStats, pitchingStats, fieldingStats] = await Promise.all([
     parseExtraStats(tmbRes, 'tablefix2', 0, { 1: 'avg', 9: 'hr', 12: 'sb', '-2': 'slg', '-1': 'obp' }, isLegacy),
     parseExtraStats(tmpRes, 'tablefix2', 0, {
       1: 'era',
@@ -680,6 +684,7 @@ async function buildStandingsData(league, year, request, env) {
       18: 'hitBatters',
       19: 'strikeouts',
     }, isLegacy),
+    parseExtraStats(tmfRes, 'tablefix2', 0, { 1: 'fieldingPct' }, isLegacy),
   ]);
   Object.values(battingStats).forEach((stats) => {
     stats.ops = calculateOps(stats.slg, stats.obp);
@@ -693,6 +698,7 @@ async function buildStandingsData(league, year, request, env) {
     teams,
     battingStats,
     pitchingStats,
+    fieldingStats,
   );
   const hrAdjustment = await mergeAdjustedHomeRuns(teams, year, env);
 
@@ -723,7 +729,7 @@ async function refreshStandings(league, year, request, env) {
 
   const { data, sourceUrl } = await buildStandingsData(league, year, request, env);
   await writeStandingsToD1(env, data, sourceUrl);
-  const cacheKey = `standings:v5:${league}:${year}`;
+  const cacheKey = `standings:v6:${league}:${year}`;
   await clearEdgeCache(request, `api:${cacheKey}`);
   await putCachedJson(env, cacheKey, data, getYearAwareTtl(year, 600), request);
   return {
@@ -797,7 +803,7 @@ async function handleStandings(league, request, env) {
   }
 
   const year = getYear(request.url);
-  const cacheKey = `standings:v5:${league}:${year}`;
+  const cacheKey = `standings:v6:${league}:${year}`;
   const cached = await getCachedJson(env, cacheKey, request);
   if (cached) return Response.json(cached);
 
