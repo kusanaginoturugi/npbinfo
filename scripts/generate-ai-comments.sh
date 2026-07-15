@@ -8,16 +8,19 @@
 # 任意環境変数:
 #   LLM_BASE_URL    OpenAI 互換エンドポイント。既定は Gemini。
 #                   llama.cpp に切り替えるときは http://localhost:8080/v1 など。
-#   LLM_MODEL       既定 models/gemini-2.5-flash（Gemini は models/ プレフィックス必須）
+#   LLM_MODEL       既定 models/gemini-3.5-flash（Gemini は models/ プレフィックス必須）
 #   NPBINFO_BASE_URL 既定 https://npbinfo.kusanaginoturugi.workers.dev
 #   YEAR            既定 今年
 #   LLM_SLEEP       各リクエスト間の待ち秒数（無料枠のレート制限対策）。既定 5
+#   TEAMS           生成対象を空白区切りのチーム名で絞る（例: TEAMS="日本ハム 楽天"）。既定は全チーム
 set -eu
 
 : "${LLM_API_KEY:?LLM_API_KEY を設定してください}"
 : "${REFRESH_TOKEN:?REFRESH_TOKEN を設定してください}"
 LLM_BASE_URL="${LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}"
-LLM_MODEL="${LLM_MODEL:-models/gemini-2.5-flash}"
+# 注意: Gemini は古いモデルを新規ユーザーに順次閉じる。使えなくなったら
+# /v1beta/openai/models で一覧を確認して差し替える（models/ プレフィックス必須）。
+LLM_MODEL="${LLM_MODEL:-models/gemini-3.5-flash}"
 NPBINFO_BASE_URL="${NPBINFO_BASE_URL:-https://npbinfo.kusanaginoturugi.workers.dev}"
 YEAR="${YEAR:-$(date +%Y)}"
 LLM_SLEEP="${LLM_SLEEP:-5}"
@@ -49,23 +52,32 @@ league_label() {
 
 generate_comment() {
   prompt=$1
-  response=$(jq -n \
-    --arg model "$LLM_MODEL" \
-    --arg system "$SYSTEM_PROMPT" \
-    --arg user "$prompt" \
-    '{model: $model, messages: [{role: "system", content: $system}, {role: "user", content: $user}]}' \
-    | curl -sS "$LLM_BASE_URL/chat/completions" \
-        -H "Authorization: Bearer $LLM_API_KEY" \
-        -H 'Content-Type: application/json' \
-        -d @-)
-  # Gemini はエラーを [{error: ...}] の配列で返すことがある
-  error=$(printf '%s' "$response" \
-    | jq -r 'if type == "array" then .[0] else . end | .error.message // empty' 2>/dev/null)
-  if [ -n "$error" ]; then
-    echo "LLM error: $error" >&2
-    return 1
-  fi
-  printf '%s' "$response" | jq -r '.choices[0].message.content // empty'
+  attempt=1
+  while :; do
+    response=$(jq -n \
+      --arg model "$LLM_MODEL" \
+      --arg system "$SYSTEM_PROMPT" \
+      --arg user "$prompt" \
+      '{model: $model, messages: [{role: "system", content: $system}, {role: "user", content: $user}]}' \
+      | curl -sS "$LLM_BASE_URL/chat/completions" \
+          -H "Authorization: Bearer $LLM_API_KEY" \
+          -H 'Content-Type: application/json' \
+          -d @-)
+    # Gemini はエラーを [{error: ...}] の配列で返すことがある
+    error=$(printf '%s' "$response" \
+      | jq -r 'if type == "array" then .[0] else . end | .error.message // empty' 2>/dev/null)
+    if [ -z "$error" ]; then
+      printf '%s' "$response" | jq -r '.choices[0].message.content // empty'
+      return 0
+    fi
+    echo "LLM error (attempt $attempt): $error" >&2
+    if [ "$attempt" -ge 3 ]; then
+      return 1
+    fi
+    attempt=$((attempt + 1))
+    # 429 や一時的な high demand 向けに間隔を伸ばして再試行
+    sleep $((LLM_SLEEP * attempt))
+  done
 }
 
 push_comment() {
@@ -91,6 +103,12 @@ for league in cl pl; do
     | @tsv')
 
   printf '%s' "$standings" | jq -r '.teams[].name' | while IFS= read -r name; do
+    if [ -n "${TEAMS:-}" ]; then
+      case " $TEAMS " in
+        *" $name "*) ;;
+        *) continue ;;
+      esac
+    fi
     slug=$(slug_for "$name")
     if [ -z "$slug" ]; then
       echo "skip: 未知のチーム名 $name" >&2

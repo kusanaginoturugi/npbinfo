@@ -139,6 +139,14 @@
 - 生成スクリプトは `sh -n` と順位表整形部分（jq）を実機確認。LLM 呼び出しは Gemini API キー投入後に実行予定。
 - ユーザーの初回実行で全件 404 → 原因は Gemini OpenAI 互換 API のモデル ID に `models/` プレフィックスが必須なこと。既定値を `models/gemini-2.5-flash` に修正。
   - 合わせて `curl -f` がエラー本文を捨てていたのを改め、`.error.message` を stderr に出すようにした（Gemini はエラーを配列で返すことがある点も対応）。
+- `models/gemini-2.5-flash` は「新規ユーザーには提供終了」エラーになったため、既定値を `models/gemini-3.5-flash` に更新（ユーザー実機で動作確認済み）。
+  - Gemini は古いモデルを順次閉じるので、エラー時は `/v1beta/openai/models` で一覧を確認して差し替える旨をスクリプトにコメントした。
+- 本番初回生成: 2026-07-15 に 12 球団分を Gemini 無料枠で生成・投入し、`/teams/hanshin` の表示をスクショ確認。
+  - 初回実行中に「high demand」一時エラーで日本ハムのみ歯抜け → リトライ（最大3回、間隔逓増）と `TEAMS` フィルタ（空白区切りで対象を絞る）をスクリプトに追加。ユーザーが `TEAMS=日本ハム` で再実行し 12/12 完了。
+- 定期実行: systemd user timer の雛形を `systemd/` に追加（毎日 01:00、`Persistent=true`）。
+  - `npbinfo-ai-comments.service` / `.timer` / `ai-comments.env.example` の3ファイル。
+  - シークレットはリポジトリ外の `~/.config/npbinfo/ai-comments.env`（600）から `EnvironmentFile` で読む。
+  - ユーザーのマシンには units コピー・`daemon-reload`・env 雛形設置まで実施済み。キー記入と `systemctl --user enable --now npbinfo-ai-comments.timer` はユーザー側で行う。
 - 本番 `REFRESH_TOKEN` secret は設定済みであることを確認（新規 secret 不要）。
 - デプロイ時の追加手順: `npx wrangler d1 migrations apply npbinfo-db --remote`。
 

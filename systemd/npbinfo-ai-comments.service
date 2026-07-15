@@ -1,0 +1,11 @@
+[Unit]
+Description=npbinfo AI team comments generation (issue #13)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/src/npbinfo
+# LLM_API_KEY / REFRESH_TOKEN はリポジトリ外の env ファイルに置く
+EnvironmentFile=%h/.config/npbinfo/ai-comments.env
+ExecStart=%h/src/npbinfo/scripts/generate-ai-comments.sh
