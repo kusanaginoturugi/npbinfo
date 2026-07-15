@@ -488,6 +488,24 @@ body {
   font-size: 15px;
 }
 
+.ai-comment-card {
+  padding: 14px 16px;
+  border: 1px solid var(--border-table);
+  border-radius: 8px;
+}
+
+.ai-comment-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.ai-comment-note {
+  margin: 10px 0 0;
+  color: var(--color-footer);
+  font-size: 12px;
+}
+
 .h2h-tables {
   display: flex;
   gap: 20px;

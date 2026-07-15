@@ -2267,6 +2267,108 @@ async function handleRecent(league, request, env) {
   return Response.json(resultData);
 }
 
+// ─── AIコメント ───────────────────────────────────────────────
+// 生成は自宅マシン側のバッチ（scripts/generate-ai-comments.sh）が行い、
+// ここは D1 への保存（push）と読み出しだけを担当する。
+const AI_SUBJECT_TYPES = new Set(['team', 'player', 'weekly']);
+const AI_CONTENT_MAX_LENGTH = 4000;
+
+async function handleAiCommentGet(subjectType, subjectKey, request, env) {
+  if (!AI_SUBJECT_TYPES.has(subjectType) || !subjectKey) {
+    return Response.json({ error: 'invalid subject' }, { status: 400 });
+  }
+  if (!hasD1(env)) return Response.json({ comment: null });
+
+  const url = new URL(request.url);
+  const year = Number.parseInt(url.searchParams.get('year') || String(getCurrentYear()), 10);
+  try {
+    const result = await env.DB.prepare(`
+      SELECT content, model, generated_at
+      FROM ai_comments
+      WHERE subject_type = ?1
+        AND subject_key = ?2
+        AND year = ?3
+      ORDER BY generated_at DESC
+      LIMIT 1
+    `).bind(subjectType, subjectKey, year).all();
+    const row = result.results?.[0];
+    return Response.json(
+      {
+        comment: row
+          ? { content: row.content, model: row.model, generatedAt: row.generated_at }
+          : null,
+      },
+      { headers: { 'Cache-Control': 'public, max-age=900' } },
+    );
+  } catch (err) {
+    console.warn(`AI comment read failed for ${subjectType}:${subjectKey}: ${err.message}`);
+    return Response.json({ comment: null });
+  }
+}
+
+function validateAiCommentItem(item) {
+  if (!item || typeof item !== 'object') return 'item must be an object';
+  if (!AI_SUBJECT_TYPES.has(item.subjectType)) return `invalid subjectType: ${item.subjectType}`;
+  if (typeof item.subjectKey !== 'string' || !item.subjectKey) return 'subjectKey is required';
+  if (!Number.isInteger(item.year)) return 'year must be an integer';
+  if (typeof item.content !== 'string' || !item.content.trim()) return 'content is required';
+  if (item.content.length > AI_CONTENT_MAX_LENGTH) return `content exceeds ${AI_CONTENT_MAX_LENGTH} chars`;
+  if (typeof item.model !== 'string' || !item.model) return 'model is required';
+  return null;
+}
+
+async function handleAiCommentIngest(request, env) {
+  if (request.method !== 'POST') {
+    return new Response('Method Not Allowed', { status: 405 });
+  }
+  if (!isRefreshAuthorized(request, env)) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+  if (!hasD1(env)) {
+    return Response.json({ ok: false, error: 'D1 unavailable' }, { status: 503 });
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ ok: false, error: 'invalid JSON body' }, { status: 400 });
+  }
+
+  const items = Array.isArray(body?.items) ? body.items : [body];
+  for (const item of items) {
+    const error = validateAiCommentItem(item);
+    if (error) return Response.json({ ok: false, error }, { status: 400 });
+  }
+
+  const generatedAt = new Date().toISOString();
+  try {
+    await env.DB.batch(items.map(item => env.DB.prepare(`
+      INSERT OR REPLACE INTO ai_comments (
+        subject_type,
+        subject_key,
+        year,
+        content,
+        model,
+        generated_at
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+    `).bind(
+      item.subjectType,
+      item.subjectKey,
+      item.year,
+      item.content.trim(),
+      item.model,
+      generatedAt,
+    )));
+    return Response.json({ ok: true, stored: items.length, generatedAt });
+  } catch (err) {
+    return Response.json(
+      { ok: false, error: 'D1 write failed', detail: err.message },
+      { status: 500 },
+    );
+  }
+}
+
 // ─── ルーター ─────────────────────────────────────────────────
 export default {
   async scheduled(controller, env) {
@@ -2336,6 +2438,13 @@ export default {
     // /api/weather?lat=..&lng=..&date=YYYY-MM-DD
     if (segments[0] === 'api' && segments[1] === 'weather') {
       return handleWeather(request, env);
+    }
+
+    // POST /api/ai/comments（保存） / GET /api/ai/comments/:type/:key?year=YYYY（取得）
+    if (segments[0] === 'api' && segments[1] === 'ai' && segments[2] === 'comments') {
+      if (!segments[3]) return handleAiCommentIngest(request, env);
+      if (segments[4]) return handleAiCommentGet(segments[3], segments[4], request, env);
+      return Response.json({ error: 'not found' }, { status: 404 });
     }
 
     // /og/standings/:league.png

@@ -114,6 +114,34 @@
 - ローカルAPIで `fieldingPct` の付与を確認（例: ソフトバンク .990、オリックス .992）。
 - headless chromium でレーダーをスクショ確認。ローカルは hrAdjusted 欠損のため動的フィルタで5軸描画（守備率・OPS・盗塁・防御率・DER近似）。本番は6軸になる想定、デプロイ後に確認。
 
+### Work Log (7): AIチームコメントの基盤（issue #13 PoC）
+
+- 方針: push 型アーキテクチャを採用。生成は自宅マシンのバッチが行い、Worker は保存と配信のみ。
+  - Cloudflare Workers は tailnet に入れないため、pull 型だと llama.cpp の外部公開（Tailscale Funnel 等）が必要になる。push 型なら inbound 公開ゼロ。
+  - 生成側は OpenAI 互換 API 前提。評価フェーズは Gemini 無料枠（`gemini-2.5-flash`）、将来は base URL 差し替えだけで自宅 llama.cpp（`http://localhost:8080/v1`）へ移行できる。
+- `migrations/0002_ai_comments.sql`: `ai_comments` テーブル新設。
+  - `(subject_type, subject_key, year, generated_at)` UNIQUE。履歴を残し、読み出しは最新1件。
+  - `model` カラムで生成モデルを記録（Gemini 期と llama.cpp 期の品質比較用）。
+- `worker/index.js`:
+  - GET `/api/ai/comments/:type/:key?year=` — 最新コメントを返す（無ければ `{comment: null}`）。
+  - POST `/api/ai/comments` — 認証は既存の `REFRESH_TOKEN`（`isRefreshAuthorized` 流用）。単体/配列（`items`）両対応、バリデーションあり。
+- `scripts/generate-ai-comments.sh`: 生成バッチ（sh + curl + jq）。
+  - 順位表 API から 12 球団分の成績表を組み立て、チームごとに約200字の調子コメントを生成して push。
+  - 環境変数: `LLM_API_KEY` / `REFRESH_TOKEN`（必須）、`LLM_BASE_URL` / `LLM_MODEL` / `NPBINFO_BASE_URL` / `YEAR` / `LLM_SLEEP`（任意）。
+- `src/components/TeamAiComment.jsx`: チームページ見出し直下に「AIコメント」ブロックを表示。データが無いチームは非表示。
+  - AI 生成である旨・モデル名・生成日を注記。
+
+### Verification (7)
+
+- `node --check` / `npm run build` / `npm test`（9件）通過。lint 残件は既存問題のみ（stash 比較で確認）。
+- ローカル D1 に migration 適用後、`wrangler dev` に対して POST → GET の往復、負系（不正 subjectType / 不正 JSON で 400、未登録チームで `comment: null`）を確認。
+- `/teams/hanshin` に手動投入コメントが表示されることをスクショ確認。
+- 生成スクリプトは `sh -n` と順位表整形部分（jq）を実機確認。LLM 呼び出しは Gemini API キー投入後に実行予定。
+- ユーザーの初回実行で全件 404 → 原因は Gemini OpenAI 互換 API のモデル ID に `models/` プレフィックスが必須なこと。既定値を `models/gemini-2.5-flash` に修正。
+  - 合わせて `curl -f` がエラー本文を捨てていたのを改め、`.error.message` を stderr に出すようにした（Gemini はエラーを配列で返すことがある点も対応）。
+- 本番 `REFRESH_TOKEN` secret は設定済みであることを確認（新規 secret 不要）。
+- デプロイ時の追加手順: `npx wrangler d1 migrations apply npbinfo-db --remote`。
+
 ## 2026-07-03
 
 ### Plan

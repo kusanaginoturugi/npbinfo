@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { getContrastColor, getTeamBySlug } from '../data/teams';
+import TeamAiComment from './TeamAiComment';
 import TeamHeadToHead from './TeamHeadToHead';
 
 // チーム別のX公式リスト。作成済みのチームだけ関連ポスト欄を表示する。
@@ -126,6 +127,8 @@ export default function TeamTimeline({ teamSlug, dark }) {
           <p className="team-page-subtitle">チーム情報</p>
         </div>
       </div>
+
+      <TeamAiComment teamSlug={teamSlug} />
 
       <TeamHeadToHead teamName={team.shortName} year={new Date().getFullYear()} />
 
