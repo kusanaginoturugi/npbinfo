@@ -22,6 +22,19 @@
 - playwright で成績・日程・チームページの表示を確認。lint の新規エラーなし（`Schedule.jsx` の既存3件のみ）。
 - ハマりどころ: `wrangler dev` / `wrangler deploy` は `.wrangler/deploy/config.json` 経由で vite が生成する `dist/npbinfo/` の成果物を使う。worker の変更は `npm run build` 後でないと反映されない。
 
+### Work Log (12): AIコメントのモデル比較ランナー
+
+- `scripts/compare-ai-models.sh` を新設。同一プロンプト（今日の見所 or 成績）を複数モデルに投げて出力を並べる。push はしない。
+  - provider: `gemini`（OpenAI 互換） / `openai`（同） / `anthropic`（ネイティブ `/v1/messages`、thinking 常時オンのため max_tokens 8000、temperature 非送信） / `local`（llama.cpp）。
+  - キーは `LLM_API_KEY` / `LLM_API_KEY_OPENAI` / `LLM_API_KEY_CLAUDE`。`PERSONA` でキャラ固定、`SUBJECT` でお題指定。
+- 比較結果は `docs/ai-model-comparison.md` に記録（キャラ5種 × Gemini/GPT-5.5、ローカル2モデル）。
+  - 概況: キャラの芸は Gemini 圧勝、GPT-5.5 は分析・字数が正確、translategemma-12b はキャラ消失+細部の綻び、qwen3-8b は事実捏造でこのタスクには実用未満。claude-fable-5 はクレジット未購入で未実施。
+
+### Verification (12)
+
+- Gemini 無料枠のレート制限（gemini-3.5-flash、20リクエスト規模）に連続実行で接触。リトライで回収。
+- ローカルの qwen3-8b 初回ロード失敗の原因は llama-server ルーターの `--models-max` がモデル数しか見ず VRAM 空きを考慮しないこと（`tools/server/server-models.cpp` の `unload_lru()` を確認）。`/etc/conf.d/llama.cpp` を `--models-max 1` に変更して解決（リポジトリ外の設定）。
+
 ## 2026-07-14
 
 ### Plan
