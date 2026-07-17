@@ -1,5 +1,27 @@
 # Agent Worklog
 
+## 2026-07-17
+
+### Work Log (11): AIコメントを成績・日程ページへ展開（issue #13 次フェーズ）
+
+- `migrations/0003_ai_comments_persona.sql`: `ai_comments` に `persona` カラムを追加（担当キャラの slug）。ローカル適用済み、リモートはデプロイ時に適用する。
+- `worker/index.js`: `AI_SUBJECT_TYPES` に `stats` / `schedule` を追加。persona の保存・返却・バリデーションを実装。
+- `prompts/stats.txt` / `prompts/schedule.txt`: タスク別ルールを新設（`common.txt` はチーム調子コメント用のまま不変）。
+- `scripts/generate-ai-comments.sh`:
+  - `SUBJECTS`（既定 `team stats schedule`）で生成対象を絞れるようにした。
+  - stats: 打撃/投手 × 両リーグの上位20人ランキングを素材に生成。key は `batting:cl` 形式。
+  - schedule: 当日の試合カード + 両リーグ順位表を素材に「今日の見所」記事を生成。key は日付。試合が無い日はスキップ。
+  - stats / schedule は `shuf` で `prompts/personas/` の12キャラからランダムに起用し、persona として push する。
+- `src/components/AiComment.jsx`: 汎用表示コンポーネントを新設し、`TeamAiComment.jsx` を置き換え（削除）。`showPersona` で「本日の担当: ○○担当」をチームカラードット付きで表示。
+- 選手成績ページ（表の下）と試合日程ページ（試合リストの下、選択日を key に取得）に配置した。
+
+### Verification (11)
+
+- `sh -n` と DRY_RUN（team / stats / schedule）でプロンプト合成を確認。
+- ローカル D1 + `wrangler dev` で POST/GET・バリデーション・既存 team 互換を確認。
+- playwright で成績・日程・チームページの表示を確認。lint の新規エラーなし（`Schedule.jsx` の既存3件のみ）。
+- ハマりどころ: `wrangler dev` / `wrangler deploy` は `.wrangler/deploy/config.json` 経由で vite が生成する `dist/npbinfo/` の成果物を使う。worker の変更は `npm run build` 後でないと反映されない。
+
 ## 2026-07-14
 
 ### Plan

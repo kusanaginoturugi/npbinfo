@@ -489,9 +489,24 @@ body {
 }
 
 .ai-comment-card {
+  margin-top: 12px;
   padding: 14px 16px;
   border: 1px solid var(--border-table);
   border-radius: 8px;
+}
+
+.team-page-block-title + .ai-comment-card {
+  margin-top: 0;
+}
+
+.ai-comment-persona {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  color: var(--color-heading);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .ai-comment-text {

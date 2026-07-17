@@ -2270,7 +2270,7 @@ async function handleRecent(league, request, env) {
 // ─── AIコメント ───────────────────────────────────────────────
 // 生成は自宅マシン側のバッチ（scripts/generate-ai-comments.sh）が行い、
 // ここは D1 への保存（push）と読み出しだけを担当する。
-const AI_SUBJECT_TYPES = new Set(['team', 'player', 'weekly']);
+const AI_SUBJECT_TYPES = new Set(['team', 'player', 'weekly', 'stats', 'schedule']);
 const AI_CONTENT_MAX_LENGTH = 4000;
 
 async function handleAiCommentGet(subjectType, subjectKey, request, env) {
@@ -2283,7 +2283,7 @@ async function handleAiCommentGet(subjectType, subjectKey, request, env) {
   const year = Number.parseInt(url.searchParams.get('year') || String(getCurrentYear()), 10);
   try {
     const result = await env.DB.prepare(`
-      SELECT content, model, generated_at
+      SELECT content, model, persona, generated_at
       FROM ai_comments
       WHERE subject_type = ?1
         AND subject_key = ?2
@@ -2295,7 +2295,12 @@ async function handleAiCommentGet(subjectType, subjectKey, request, env) {
     return Response.json(
       {
         comment: row
-          ? { content: row.content, model: row.model, generatedAt: row.generated_at }
+          ? {
+            content: row.content,
+            model: row.model,
+            persona: row.persona ?? null,
+            generatedAt: row.generated_at,
+          }
           : null,
       },
       { headers: { 'Cache-Control': 'public, max-age=900' } },
@@ -2314,6 +2319,9 @@ function validateAiCommentItem(item) {
   if (typeof item.content !== 'string' || !item.content.trim()) return 'content is required';
   if (item.content.length > AI_CONTENT_MAX_LENGTH) return `content exceeds ${AI_CONTENT_MAX_LENGTH} chars`;
   if (typeof item.model !== 'string' || !item.model) return 'model is required';
+  if (item.persona != null && (typeof item.persona !== 'string' || item.persona.length > 100)) {
+    return 'persona must be a short string';
+  }
   return null;
 }
 
@@ -2350,14 +2358,16 @@ async function handleAiCommentIngest(request, env) {
         year,
         content,
         model,
+        persona,
         generated_at
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
     `).bind(
       item.subjectType,
       item.subjectKey,
       item.year,
       item.content.trim(),
       item.model,
+      item.persona ?? null,
       generatedAt,
     )));
     return Response.json({ ok: true, stored: items.length, generatedAt });

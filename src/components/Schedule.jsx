@@ -4,6 +4,7 @@ import { isDebugMode, withNoCache } from '../utils/debug';
 import { getContrastColor, getTeamInfo, getTeamLeague, normalizeTeamName } from '../data/teams';
 import { STADIUMS } from '../data/stadiums';
 import { formatPrecipitation, formatTemperature, getWeatherIcon } from '../utils/weatherIcon';
+import AiComment from './AiComment';
 
 const CURRENT_DATE = new Date();
 const CURRENT_MONTH = `${CURRENT_DATE.getFullYear()}-${String(CURRENT_DATE.getMonth() + 1).padStart(2, '0')}`;
@@ -577,6 +578,16 @@ export default function Schedule({ initialMonth = CURRENT_MONTH, onMonthChange, 
           ) : (
             <div className="status-msg">この日の試合はありません</div>
           )}
+
+          <AiComment
+            key={selectedDate}
+            subjectType="schedule"
+            subjectKey={selectedDate}
+            year={Number(selectedDate.slice(0, 4))}
+            title="今日の見所"
+            titleClassName="team-page-block-title"
+            showPersona
+          />
 
           {lastUpdated[cacheKey] && (
             <div className="updated-note">

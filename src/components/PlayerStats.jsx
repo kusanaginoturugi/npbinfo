@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { TEAMS, getContrastColor, getTeamInfo } from '../data/teams';
+import AiComment from './AiComment';
 import { useFavorites } from '../hooks/useFavorites';
 import { apiCache } from '../utils/apiCache';
 import { isDebugMode, withNoCache } from '../utils/debug';
@@ -402,6 +403,13 @@ export default function PlayerStats({
               {updateNote ? ` (npb.jp 反映: ${updateNote})` : ''}
             </div>
           )}
+          <AiComment
+            key={`${type}:${league}:${year}`}
+            subjectType="stats"
+            subjectKey={`${type}:${league}`}
+            year={year}
+            showPersona
+          />
         </>
       )}
     </section>
