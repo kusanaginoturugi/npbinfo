@@ -1,0 +1,10 @@
+[Unit]
+Description=npbinfo 5ch thread AI summaries (local llama.cpp)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/src/npbinfo
+EnvironmentFile=%h/.config/npbinfo/thread-summaries.env
+ExecStart=%h/src/npbinfo/scripts/generate-thread-summaries.sh

@@ -68,6 +68,22 @@
 - 蔑称ルール追加後の再生成で「便器」→「福岡の球団」への言い換えを確認。
 - 不正 subjectType の一括 GET は 400。lint は既存1件のみ。
 
+### Work Log (15): スレ要約の全スレ化・クレジット表示・定期実行の雛形
+
+- `scripts/generate-thread-summaries.sh`: 既定を `THREADS_LIMIT=30`（API 上限）に変更し、関連スレ全件を要約対象にした。
+  - 5ch への負荷: 1回30リクエスト × 1日4回 = 120、スレ間3秒の逐次アクセス + 連絡先入り UA で問題ない水準。
+- `src/components/Threads.jsx`: 要約末尾に短縮クレジット `（モデル名 / M/D HH:MM）` を表示（`.thread-summary-credit`）。
+- `systemd/npbinfo-thread-summaries.{service,timer}` + `thread-summaries.env.example`: 8/13/18/21時の定期実行の雛形。
+  - env は `~/.config/npbinfo/thread-summaries.env` に分離（ai-comments.env の `LLM_MODEL`=Gemini がローカル既定を上書きする事故を防ぐ）。
+- `docs/ai-model-comparison.md`: スレ要約タスクの比較（translategemma-12b vs qwen3-8b）を追記。
+  - qwen3-8b はキャラ記事と違い要約では接戦（数字を拾う）が、細部の綻び（6球団なのに10位等）が残る。運用は translategemma-12b 継続。
+  - qwen3-14b（FableVibes）はテンプレート不一致による多言語混線・繰り返し崩壊で未参戦。要調整。
+
+### Verification (15)
+
+- ローカルで全30スレ生成 → 本番 push（stored: 30）を確認。クレジット表示は `wrangler dev` + playwright でスクショ確認。
+- systemd user unit は `~/.config/systemd/user/` に配置・daemon-reload 済み。enable はユーザー操作（REFRESH_TOKEN 記入後）。
+
 ## 2026-07-14
 
 ### Plan

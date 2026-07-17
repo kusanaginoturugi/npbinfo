@@ -1,0 +1,10 @@
+[Unit]
+Description=Run npbinfo thread summaries at 08/13/18/21 JST
+
+[Timer]
+OnCalendar=*-*-* 08,13,18,21:00:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

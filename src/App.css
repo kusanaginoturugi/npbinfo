@@ -1042,6 +1042,13 @@ body {
   font-weight: 700;
 }
 
+.thread-summary-credit {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-footer);
+  font-size: 10px;
+}
+
 .thread-link {
   margin-top: auto;
   color: var(--color-tab-active);

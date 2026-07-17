@@ -25,6 +25,16 @@ function formatSpeed(value) {
   return value.toFixed(1);
 }
 
+function formatSummaryCredit(summary) {
+  const at = new Date(summary.generatedAt).toLocaleString('ja-JP', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return `${summary.model} / ${at}`;
+}
+
 function ThreadCard({ thread, summary }) {
   return (
     <article className="thread-card">
@@ -48,9 +58,10 @@ function ThreadCard({ thread, summary }) {
         </div>
       )}
       {summary && (
-        <p className="thread-summary" title={`${summary.model} による自動生成`}>
+        <p className="thread-summary">
           <span className="thread-summary-label">AI要約</span>
           {summary.content}
+          <span className="thread-summary-credit">（{formatSummaryCredit(summary)}）</span>
         </p>
       )}
       <a className="thread-link" href={thread.url} target="_blank" rel="noreferrer">

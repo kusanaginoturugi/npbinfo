@@ -11,7 +11,7 @@
 #   LLM_MODEL       既定 translategemma-12b
 #   LLM_API_KEY     llama.cpp では不要（既定 dummy）。クラウドに向けるときだけ設定
 #   NPBINFO_BASE_URL 既定 https://npbinfo.kusanaginoturugi.workers.dev
-#   THREADS_LIMIT   まとめ対象のスレ数（勢い順の上位）。既定 6
+#   THREADS_LIMIT   まとめ対象のスレ数（勢い順の上位、API 上限 30）。既定 30
 #   RES_PER_THREAD  スレごとに取得する直近レス数。既定 30
 #   FETCH_SLEEP     5ch への連続アクセスの間隔秒。既定 3
 #   PROMPTS_DIR     プロンプト置き場。既定はリポジトリの prompts/
@@ -30,7 +30,7 @@ LLM_BASE_URL="${LLM_BASE_URL:-http://localhost:8080/v1}"
 LLM_MODEL="${LLM_MODEL:-translategemma-12b}"
 LLM_API_KEY="${LLM_API_KEY:-dummy}"
 NPBINFO_BASE_URL="${NPBINFO_BASE_URL:-https://npbinfo.kusanaginoturugi.workers.dev}"
-THREADS_LIMIT="${THREADS_LIMIT:-6}"
+THREADS_LIMIT="${THREADS_LIMIT:-30}"
 RES_PER_THREAD="${RES_PER_THREAD:-30}"
 FETCH_SLEEP="${FETCH_SLEEP:-3}"
 UA='npbinfo-summary/1.0 (+https://npbinfo.kusanaginoturugi.workers.dev)'
