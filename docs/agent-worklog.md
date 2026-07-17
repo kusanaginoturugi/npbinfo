@@ -115,6 +115,19 @@
 - ローカル E2E: Gemini で cl 記事を実生成（diana 担当、尾形 vs 高橋の投げ合いに言及）→ 表示を playwright で確認。7/16 はセ・パ両セクションに分かれることを確認。
 - lint は既存3エラーのみで増減なし。
 
+### Work Log (18): 個人成績コメントのチーム名略記を解消
+
+- 背景: 成績コメントに「神」「ソ」等の1文字略記が混ざる（ユーザー指摘）。原因は `/api/stats/` が npb.jp 表記の略記を素通しで返し、生成スクリプトが raw のまま渡していたこと（画面は `PlayerStats.jsx` の `TEAM_MAP` で展開済みのため気づかない）。
+- `scripts/generate-ai-comments.sh`: stats の TSV 生成 jq に略記→短縮名の展開（`TEAM_EXPAND`、`TEAM_MAP` と同じ12球団対応表）を追加。
+- `prompts/stats.txt`: 「チーム名は略記の場合があります」の注釈を削除（データ側で解決）。
+
+### Verification (18)
+
+- DRY_RUN で全リーグの TSV が正式名（阪神/DeNA/日本ハム等）になることを確認。
+- 本番の stats 4件を再生成し、略記の残存ゼロを確認。
+
+## 2026-07-14
+
 ### Plan
 
 - Issue #38 対応。操作系UIのクラス命名ルールを文書化し、意味違いのクラス流用と重複inline styleを解消する。

@@ -224,19 +224,23 @@ if subject_enabled team; then
 fi
 
 # ─── stats: 個人成績ランキングコメント（ランダムキャラ起用） ──
+# npb.jp 由来の1文字略記（神/ソ等）を正式な短縮名に展開して渡す
+# （src/components/PlayerStats.jsx の TEAM_MAP と同じ対応表）
+TEAM_EXPAND='def team($t): {"神":"阪神","デ":"DeNA","ヤ":"ヤクルト","巨":"巨人","広":"広島","中":"中日",
+  "ソ":"ソフトバンク","日":"日本ハム","楽":"楽天","ロ":"ロッテ","オ":"オリックス","西":"西武"}[$t] // $t;'
 if subject_enabled stats; then
   for type in batting pitching; do
     for league in cl pl; do
       stats=$(curl -fsS "$NPBINFO_BASE_URL/api/stats/$type/$league?year=$YEAR")
       if [ "$type" = batting ]; then
-        table=$(printf '%s' "$stats" | jq -r '
+        table=$(printf '%s' "$stats" | jq -r "$TEAM_EXPAND"'
           ["順位","選手","チーム","試合","打率","安打","本塁打","打点","盗塁","出塁率","長打率"],
-          (.players[:20][] | [.rank, .name, .team, .games, .avg, .hits, .hr, .rbi, .sb, .obp, .slg])
+          (.players[:20][] | [.rank, .name, team(.team), .games, .avg, .hits, .hr, .rbi, .sb, .obp, .slg])
           | @tsv')
       else
-        table=$(printf '%s' "$stats" | jq -r '
+        table=$(printf '%s' "$stats" | jq -r "$TEAM_EXPAND"'
           ["順位","選手","チーム","防御率","登板","勝","敗","セーブ","投球回","奪三振"],
-          (.players[:20][] | [.rank, .name, .team, .era, .games, .wins, .losses, .saves, .ip, .so])
+          (.players[:20][] | [.rank, .name, team(.team), .era, .games, .wins, .losses, .saves, .ip, .so])
           | @tsv')
       fi
       if [ -z "$table" ]; then
