@@ -53,6 +53,21 @@
   - 荒れたレス（誹謗中傷混じり）を素材にしても、生成結果は野球の話題のみでガードが機能。
 - lint: `Threads.jsx` の1件（`set-state-in-effect`）は変更前から存在する既存問題（stash 比較で確認）。
 
+### Work Log (14): スレの話題まとめをスレごとの要約に変更
+
+- 背景: 全体1本のまとめは「どのスレの話か」が分からずバランスも悪い（ユーザー指摘）。勢い上位6スレに限定し、スレごとに要約を付ける方式へ変更。
+- `scripts/generate-thread-summaries.sh`: スレごと（既定 `THREADS_LIMIT=6`）に約120字の要約を生成し、`items` バッチで一括 push。subjectKey はスレID（例 `base:1784027000`）。
+- `worker/index.js`: `GET /api/ai/comments/:type`（key なし）を新設。type 内の全 key の最新コメントをマップで返す一括取得（カードごとの個別 GET を回避）。
+- `src/components/Threads.jsx`: ページ上部の全体まとめを廃止し、各スレカード内に「AI要約」バッジ付きで表示。要約はマウント時に一括取得して `thread.id` で突き合わせ。
+- `prompts/threads.txt`: 120字・スレ単位の文面に更新。初回生成で蔑称（「便器」）が要約に混入したため、「蔑称・ネットスラングは正式な呼び方に言い換える」ルールを追加。
+- `src/App.css`: `.thread-summary` / `.thread-summary-label` を追加。
+
+### Verification (14)
+
+- ローカル E2E: 6スレ生成 → バッチ push → 一括 GET → カード表示を playwright で確認（要約はマッチしたカードのみに出る）。
+- 蔑称ルール追加後の再生成で「便器」→「福岡の球団」への言い換えを確認。
+- 不正 subjectType の一括 GET は 400。lint は既存1件のみ。
+
 ## 2026-07-14
 
 ### Plan

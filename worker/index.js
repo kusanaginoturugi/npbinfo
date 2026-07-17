@@ -2311,6 +2311,42 @@ async function handleAiCommentGet(subjectType, subjectKey, request, env) {
   }
 }
 
+// subject_type 内の全 key の最新コメントをまとめて返す（スレ要約のカード表示用）
+async function handleAiCommentList(subjectType, request, env) {
+  if (!AI_SUBJECT_TYPES.has(subjectType)) {
+    return Response.json({ error: 'invalid subject' }, { status: 400 });
+  }
+  if (!hasD1(env)) return Response.json({ comments: {} });
+
+  const url = new URL(request.url);
+  const year = Number.parseInt(url.searchParams.get('year') || String(getCurrentYear()), 10);
+  try {
+    const result = await env.DB.prepare(`
+      SELECT subject_key, content, model, persona, MAX(generated_at) AS generated_at
+      FROM ai_comments
+      WHERE subject_type = ?1
+        AND year = ?2
+      GROUP BY subject_key
+    `).bind(subjectType, year).all();
+    const comments = Object.fromEntries((result.results ?? []).map(row => [
+      row.subject_key,
+      {
+        content: row.content,
+        model: row.model,
+        persona: row.persona ?? null,
+        generatedAt: row.generated_at,
+      },
+    ]));
+    return Response.json(
+      { comments },
+      { headers: { 'Cache-Control': 'public, max-age=900' } },
+    );
+  } catch (err) {
+    console.warn(`AI comment list failed for ${subjectType}: ${err.message}`);
+    return Response.json({ comments: {} });
+  }
+}
+
 function validateAiCommentItem(item) {
   if (!item || typeof item !== 'object') return 'item must be an object';
   if (!AI_SUBJECT_TYPES.has(item.subjectType)) return `invalid subjectType: ${item.subjectType}`;
@@ -2450,11 +2486,13 @@ export default {
       return handleWeather(request, env);
     }
 
-    // POST /api/ai/comments（保存） / GET /api/ai/comments/:type/:key?year=YYYY（取得）
+    // POST /api/ai/comments（保存）
+    // GET  /api/ai/comments/:type/:key?year=YYYY（1件取得）
+    // GET  /api/ai/comments/:type?year=YYYY（key→最新コメントの一括取得）
     if (segments[0] === 'api' && segments[1] === 'ai' && segments[2] === 'comments') {
       if (!segments[3]) return handleAiCommentIngest(request, env);
       if (segments[4]) return handleAiCommentGet(segments[3], segments[4], request, env);
-      return Response.json({ error: 'not found' }, { status: 404 });
+      return handleAiCommentList(segments[3], request, env);
     }
 
     // /og/standings/:league.png

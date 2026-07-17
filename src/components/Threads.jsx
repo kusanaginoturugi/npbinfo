@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { TEAMS } from '../data/teams';
 import { isDebugMode, withNoCache } from '../utils/debug';
-import AiComment from './AiComment';
 
 const TEAM_OPTIONS = [
   { value: 'all', label: 'すべて' },
@@ -26,7 +25,7 @@ function formatSpeed(value) {
   return value.toFixed(1);
 }
 
-function ThreadCard({ thread }) {
+function ThreadCard({ thread, summary }) {
   return (
     <article className="thread-card">
       <div className="thread-card-header">
@@ -48,6 +47,12 @@ function ThreadCard({ thread }) {
           ))}
         </div>
       )}
+      {summary && (
+        <p className="thread-summary" title={`${summary.model} による自動生成`}>
+          <span className="thread-summary-label">AI要約</span>
+          {summary.content}
+        </p>
+      )}
       <a className="thread-link" href={thread.url} target="_blank" rel="noreferrer">
         5chで開く
       </a>
@@ -59,6 +64,7 @@ export default function Threads() {
   const [team, setTeam] = useState('all');
   const [sort, setSort] = useState('momentum');
   const [data, setData] = useState(null);
+  const [summaries, setSummaries] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [refreshToken, setRefreshToken] = useState(0);
@@ -89,6 +95,20 @@ export default function Threads() {
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [apiPath, data, debugMode, refreshToken]);
+
+  // 勢い上位スレの AI 要約（key = スレID）を一括取得。無ければ空のまま。
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/ai/comments/threads?year=${new Date().getFullYear()}`)
+      .then(r => r.json())
+      .then(json => {
+        if (!cancelled) setSummaries(json.comments ?? {});
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshToken]);
 
   return (
     <section className="section">
@@ -124,16 +144,8 @@ export default function Threads() {
       </div>
 
       <p className="threads-note">
-        勢いは前回取得時から増えたレス数を時間あたりに換算した近似値です。レス本文は転載しません（話題まとめはAIによる要約です）。
+        勢いは前回取得時から増えたレス数を時間あたりに換算した近似値です。レス本文は転載しません（「AI要約」は勢い上位スレのレス抜粋からAIが自動生成したものです）。
       </p>
-
-      <AiComment
-        subjectType="threads"
-        subjectKey="all"
-        title="スレの話題まとめ"
-        titleClassName="team-page-block-title"
-        note="勢い上位スレのレス抜粋からAIが自動生成した要約です"
-      />
 
       {loading && <div className="status-msg">読み込み中...</div>}
       {error && (
@@ -151,7 +163,7 @@ export default function Threads() {
           {data.threads?.length ? (
             <div className="thread-grid">
               {data.threads.map(thread => (
-                <ThreadCard key={thread.id} thread={thread} />
+                <ThreadCard key={thread.id} thread={thread} summary={summaries[thread.id]} />
               ))}
             </div>
           ) : (
