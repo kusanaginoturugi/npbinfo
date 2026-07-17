@@ -59,6 +59,15 @@ random_persona_slug() {
     | shuf -n 1 | xargs -r basename | sed 's/\.txt$//'
 }
 
+# 指定リーグの6球団からランダムに1キャラ選ぶ（cl / pl 以外は全体から）
+random_persona_for_league() {
+  case "$1" in
+    cl) printf '%s\n' yakult hanshin giants dena hiroshima chunichi | shuf -n 1 ;;
+    pl) printf '%s\n' softbank nipponham rakuten lotte orix seibu | shuf -n 1 ;;
+    *) random_persona_slug ;;
+  esac
+}
+
 # キャラ設定（personas/<slug>.txt）とタスク別ルール（common.txt など）を合成する。
 # SYSTEM_PROMPT が指定されていれば合成せずそれを使う。
 system_prompt_for() {
@@ -245,29 +254,53 @@ if subject_enabled stats; then
   done
 fi
 
-# ─── schedule: 今日の見所（ランダムキャラ起用、試合が無い日はスキップ） ──
+# ─── schedule: 今日の見所（リーグ別に1本ずつ、担当はそのリーグのキャラ） ──
+# key はセ・パが「日付:cl」「日付:pl」、交流戦カードは従来どおり「日付」。
 if subject_enabled schedule; then
   today=$(date +%Y-%m-%d)
-  games=$(curl -fsS "$NPBINFO_BASE_URL/api/schedule/$(date +%Y-%m)" | jq -r --arg today "$today" '
-    .games[] | select(.date == $today)
-    | [.startTime // "-", .homeTeam, .awayTeam, .stadium // "-"] | @tsv')
-  if [ -z "$games" ]; then
-    echo "skip: $today の試合はない" >&2
-  else
-    standings_ctx=''
-    for league in cl pl; do
-      table=$(curl -fsS "$NPBINFO_BASE_URL/api/standings/$league?year=$YEAR" | jq -r '
-        ["順位","チーム","勝","敗","分","勝率","差"],
-        (.teams[] | [.rank, .name, .win, .lose, .draw, .pct, .gamesBehind])
-        | @tsv')
-      standings_ctx=$(printf '%s\n\n%s の順位表:\n%s' \
-        "$standings_ctx" "$(league_label "$league")" "$table")
-    done
+  schedule_json=$(curl -fsS "$NPBINFO_BASE_URL/api/schedule/$(date +%Y-%m)")
+  games_header=$(printf '開始\tホーム\t予告先発(ホーム)\tビジター\t予告先発(ビジター)\t球場')
 
+  # 当日の試合カードをリーグ（cl / pl / inter=交流戦・分類不能）で絞って TSV にする
+  games_for_league() {
+    printf '%s' "$schedule_json" | jq -r --arg today "$today" --arg lg "$1" '
+      def lgof($t): if (["ヤクルト","阪神","巨人","DeNA","広島","中日"] | index($t)) != null then "cl"
+        elif (["ソフトバンク","日本ハム","楽天","ロッテ","オリックス","西武"] | index($t)) != null then "pl"
+        else null end;
+      .games[] | select(.date == $today)
+      | (if lgof(.homeTeam) != null and lgof(.homeTeam) == lgof(.awayTeam) then lgof(.homeTeam) else "inter" end) as $g
+      | select($g == $lg)
+      | [.startTime // "-", .homeTeam, (.homePitcher // ""), .awayTeam, (.awayPitcher // ""), .stadium // "-"] | @tsv'
+  }
+
+  standings_table() {
+    curl -fsS "$NPBINFO_BASE_URL/api/standings/$1?year=$YEAR" | jq -r '
+      ["順位","チーム","勝","敗","分","勝率","差"],
+      (.teams[] | [.rank, .name, .win, .lose, .draw, .pct, .gamesBehind])
+      | @tsv'
+  }
+
+  generated=0
+  for lg in cl pl; do
+    games=$(games_for_league "$lg")
+    [ -z "$games" ] && continue
+    persona=$(random_persona_for_league "$lg")
+    system=$(system_prompt_for "$persona" schedule.txt)
+    prompt=$(printf '%s の%sの試合カード:\n%s\n%s\n\n%s の順位表:\n%s' \
+      "$today" "$(league_label "$lg")" "$games_header" "$games" \
+      "$(league_label "$lg")" "$(standings_table "$lg")")
+    generate_and_push "今日の見所 $lg" schedule "$today:$lg" "$system" "$prompt" "$persona" || true
+    generated=1
+  done
+
+  games=$(games_for_league inter)
+  if [ -n "$games" ]; then
     persona=$(random_persona_slug)
     system=$(system_prompt_for "$persona" schedule.txt)
-    prompt=$(printf '%s の試合カード:\n開始\tホーム\tビジター\t球場\n%s\n%s' \
-      "$today" "$games" "$standings_ctx")
-    generate_and_push '今日の見所' schedule "$today" "$system" "$prompt" "$persona" || true
+    prompt=$(printf '%s の交流戦の試合カード:\n%s\n%s\n\nセ・リーグ の順位表:\n%s\n\nパ・リーグ の順位表:\n%s' \
+      "$today" "$games_header" "$games" "$(standings_table cl)" "$(standings_table pl)")
+    generate_and_push '今日の見所 交流戦' schedule "$today" "$system" "$prompt" "$persona" || true
+    generated=1
   fi
+  [ "$generated" -eq 0 ] && echo "skip: $today の試合はない" >&2
 fi

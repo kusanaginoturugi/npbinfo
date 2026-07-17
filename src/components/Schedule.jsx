@@ -9,6 +9,13 @@ import AiComment from './AiComment';
 const CURRENT_DATE = new Date();
 const CURRENT_MONTH = `${CURRENT_DATE.getFullYear()}-${String(CURRENT_DATE.getMonth() + 1).padStart(2, '0')}`;
 
+// 表示順: セ → パ → 交流戦（両チームのリーグが違うカード）
+const LEAGUE_SECTIONS = [
+  { key: 'cl', label: 'セ・リーグ' },
+  { key: 'pl', label: 'パ・リーグ' },
+  { key: 'inter', label: '交流戦' },
+];
+
 function formatDateValue(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -391,6 +398,17 @@ export default function Schedule({ initialMonth = CURRENT_MONTH, onMonthChange, 
     [games, selectedDate],
   );
 
+  const gameGroups = useMemo(() => {
+    const groups = { cl: [], pl: [], inter: [] };
+    selectedGames.forEach((game) => {
+      const homeLeague = getTeamLeague(normalizeHeadToHeadTeamName(game.homeTeam));
+      const awayLeague = getTeamLeague(normalizeHeadToHeadTeamName(game.awayTeam));
+      const key = homeLeague && homeLeague === awayLeague ? homeLeague : 'inter';
+      groups[key].push(game);
+    });
+    return groups;
+  }, [selectedGames]);
+
   const weatherTargets = useMemo(() => {
     const targets = new Map();
     selectedGames.forEach((game) => {
@@ -573,36 +591,45 @@ export default function Schedule({ initialMonth = CURRENT_MONTH, onMonthChange, 
       {!loading && !error && schedule && (
         <>
           {selectedGames.length > 0 ? (
-            <div className="schedule-list">
-              {selectedGames.map((game, index) => {
-                const stadium = findStadiumByGameName(game.stadium);
-                return (
-                  <ScheduleCard
-                    key={`${game.date}-${index}`}
-                    game={game}
-                    stadium={stadium}
-                    onSelectStadium={onSelectStadium}
-                    weatherState={weatherCache[getWeatherCacheKey(stadium, game.date)]}
-                    headToHeadRecord={getHeadToHeadRecord(game, headToHeadCache, Number(month.slice(0, 4)))}
-                    homeRecent={getRecentGames(game.homeTeam, recentCache, Number(month.slice(0, 4)))}
-                    awayRecent={getRecentGames(game.awayTeam, recentCache, Number(month.slice(0, 4)))}
+            LEAGUE_SECTIONS.map(({ key, label }) => {
+              const leagueGames = gameGroups[key];
+              if (!leagueGames.length) return null;
+              const commentKey = key === 'inter' ? selectedDate : `${selectedDate}:${key}`;
+              return (
+                <div key={key} className="schedule-league-section">
+                  <h3 className="team-page-block-title">{label}</h3>
+                  <div className="schedule-list">
+                    {leagueGames.map((game, index) => {
+                      const stadium = findStadiumByGameName(game.stadium);
+                      return (
+                        <ScheduleCard
+                          key={`${game.date}-${key}-${index}`}
+                          game={game}
+                          stadium={stadium}
+                          onSelectStadium={onSelectStadium}
+                          weatherState={weatherCache[getWeatherCacheKey(stadium, game.date)]}
+                          headToHeadRecord={getHeadToHeadRecord(game, headToHeadCache, Number(month.slice(0, 4)))}
+                          homeRecent={getRecentGames(game.homeTeam, recentCache, Number(month.slice(0, 4)))}
+                          awayRecent={getRecentGames(game.awayTeam, recentCache, Number(month.slice(0, 4)))}
+                        />
+                      );
+                    })}
+                  </div>
+                  <AiComment
+                    key={commentKey}
+                    subjectType="schedule"
+                    subjectKey={commentKey}
+                    year={Number(selectedDate.slice(0, 4))}
+                    title={`今日の見所（${label}）`}
+                    titleClassName="team-page-block-title"
+                    showPersona
                   />
-                );
-              })}
-            </div>
+                </div>
+              );
+            })
           ) : (
             <div className="status-msg">この日の試合はありません</div>
           )}
-
-          <AiComment
-            key={selectedDate}
-            subjectType="schedule"
-            subjectKey={selectedDate}
-            year={Number(selectedDate.slice(0, 4))}
-            title="今日の見所"
-            titleClassName="team-page-block-title"
-            showPersona
-          />
 
           {lastUpdated[cacheKey] && (
             <div className="updated-note">
