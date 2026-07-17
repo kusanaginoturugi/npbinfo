@@ -98,6 +98,19 @@ function getRecentGames(teamName, recentCache, year) {
   return data?.teams?.[normalized] ?? null;
 }
 
+// 「先発：○○」「勝：○○」「敗：○○」をラベルと名前に分けて表示する
+function PitcherNote({ value }) {
+  const match = String(value ?? '').match(/^(先発|勝|敗|分|Ｓ)[：:]\s*(.+)$/);
+  if (!match) return null;
+  const label = match[1] === '先発' ? '予告先発' : match[1];
+  return (
+    <span className={`schedule-pitcher pitcher-${match[1] === '先発' ? 'starter' : 'result'}`}>
+      <span className="schedule-pitcher-label">{label}</span>
+      {match[2]}
+    </span>
+  );
+}
+
 function RecentBadges({ games }) {
   if (!games || games.length === 0) return null;
 
@@ -263,6 +276,7 @@ function ScheduleCard({ game, weatherState, headToHeadRecord, homeRecent, awayRe
           <div className="schedule-team-info">
             <TeamName name={game.homeTeam} outcome={result?.home} />
             <RecentBadges games={homeRecent} />
+            <PitcherNote value={game.homePitcher} />
           </div>
         </div>
 
@@ -272,6 +286,7 @@ function ScheduleCard({ game, weatherState, headToHeadRecord, homeRecent, awayRe
           <div className="schedule-team-info schedule-team-info-away">
             <TeamName name={game.awayTeam} outcome={result?.away} />
             <RecentBadges games={awayRecent} />
+            <PitcherNote value={game.awayPitcher} />
           </div>
           <TeamBadge name={game.awayTeam} />
         </div>
@@ -311,7 +326,7 @@ export default function Schedule({ initialMonth = CURRENT_MONTH, onMonthChange, 
   const [recentCache, setRecentCache] = useState({});
   const debugMode = isDebugMode();
 
-  const cacheKey = `schedule:v2:${month}`;
+  const cacheKey = `schedule:v3:${month}`;
   const schedule = cache[cacheKey];
   const games = schedule?.games ?? [];
 

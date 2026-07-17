@@ -1980,6 +1980,25 @@ function applyKoshienCancellation(games, cancellation) {
   }
 }
 
+// 予告先発／責任投手欄をホーム・ビジターに割り当てる。
+// npb.jp の並びは試合前（先発：）と引き分け（分：）はホーム→ビジター順だが、
+// 終了試合は勝：→敗：の順（勝者がどちらでも）なので、スコアで勝者側に付け替える。
+function assignPitchers(game, pitTexts) {
+  const [first = '', second = ''] = pitTexts;
+  const win = [first, second].find(text => text.startsWith('勝'));
+  const lose = [first, second].find(text => text.startsWith('敗'));
+  const homeScore = Number.parseInt(game.homeScore, 10);
+  const awayScore = Number.parseInt(game.awayScore, 10);
+  if (win && lose && Number.isFinite(homeScore) && Number.isFinite(awayScore) && homeScore !== awayScore) {
+    const homeWon = homeScore > awayScore;
+    game.homePitcher = homeWon ? win : lose;
+    game.awayPitcher = homeWon ? lose : win;
+    return;
+  }
+  game.homePitcher = first;
+  game.awayPitcher = second;
+}
+
 async function handleSchedule(monthParam, request, env) {
   const match = monthParam?.match(/^(\d{4})-(\d{2})$/);
   if (!match) {
@@ -1993,7 +2012,7 @@ async function handleSchedule(monthParam, request, env) {
     return new Response('Not Found', { status: 404 });
   }
 
-  const cacheKey = `schedule:v2:${year}-${month}`;
+  const cacheKey = `schedule:v3:${year}-${month}`;
   const cached = await getCachedJson(env, cacheKey, request);
   if (cached) return Response.json(cached);
 
@@ -2017,6 +2036,7 @@ async function handleSchedule(monthParam, request, env) {
       : Promise.resolve(null);
     let currentGame = null;
     let currentField = null;
+    let pitTexts = [];
 
     function appendText(chunk) {
       if (!currentGame || !currentField) return;
@@ -2053,14 +2073,19 @@ async function handleSchedule(monthParam, request, env) {
             stadium: '',
             startTime: '',
             comment: '',
+            // 予告先発／責任投手（試合前「先発：○○」/ 終了後「勝：○○」「敗：○○」/ 引き分け「分：○○」）
+            homePitcher: '',
+            awayPitcher: '',
             scoreUrl: null,
           };
+          pitTexts = [];
 
           el.onEndTag(() => {
             if (!currentGame) return;
             if (currentGame.homeTeam && currentGame.awayTeam) {
               currentGame.homeScore = currentGame.homeScore === '' ? null : currentGame.homeScore;
               currentGame.awayScore = currentGame.awayScore === '' ? null : currentGame.awayScore;
+              assignPitchers(currentGame, pitTexts);
               currentGame.status = getGameStatus(currentGame);
               games.push(currentGame);
             }
@@ -2084,6 +2109,21 @@ async function handleSchedule(monthParam, request, env) {
       .on('div.place', enterTextField('stadium'))
       .on('div.time', enterTextField('startTime'))
       .on('div.comment', enterTextField('comment'))
+      .on('div.pit', {
+        element(el) {
+          if (!currentGame) return;
+          const index = pitTexts.length;
+          pitTexts.push('');
+          currentField = null;
+          el.onEndTag(() => {
+            pitTexts[index] = normalizeText(pitTexts[index]);
+          });
+        },
+        text(chunk) {
+          if (pitTexts.length === 0) return;
+          pitTexts[pitTexts.length - 1] += chunk.text;
+        },
+      })
       .transform(res)
       .text();
 

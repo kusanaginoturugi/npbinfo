@@ -84,6 +84,20 @@
 - ローカルで全30スレ生成 → 本番 push（stored: 30）を確認。クレジット表示は `wrangler dev` + playwright でスクショ確認。
 - systemd user unit は `~/.config/systemd/user/` に配置・daemon-reload 済み。enable はユーザー操作（REFRESH_TOKEN 記入後）。
 
+### Work Log (16): 試合日程に予告先発／責任投手を表示（issue #40）
+
+- データソース: 既にスクレイピングしている `schedule_MM_detail.html` に「予告先発／責任投手」列（`div.pit` × 2）が存在。新規取得なし。
+- `worker/index.js`: `div.pit` を収集して `homePitcher` / `awayPitcher` を付与。キャッシュキー `schedule:v2` → `v3`。
+  - npb.jp の並び順の罠: 試合前（先発：）と引き分け（分：）はホーム→ビジター順だが、**終了試合は勝→敗順**（勝者がどちら側でも勝ち投手が先）。`assignPitchers` でスコアから勝者側に付け替える。
+- `src/components/Schedule.jsx`: 各チーム名の下に `PitcherNote` を表示（試合前「予告先発 ○○」/ 終了後「勝 ○○」「敗 ○○」）。キャッシュキー `v3` 追随。
+- `src/App.css`: `.schedule-pitcher(-label)` を追加。
+
+### Verification (16)
+
+- API で試合前（先発：ウィットリー/大野）と終了試合の割り当てを確認。7/16 の5試合すべてで勝敗投手が正しい側に付く（位置ベースだと勝敗が逆転する事故を修正済み）。
+- playwright で今日（予告先発）と 7/16（勝・敗）のカード表示をスクショ確認。
+- `node --check` / `npm run build` 通過。lint は既存6件のみで増減なし。
+
 ## 2026-07-14
 
 ### Plan

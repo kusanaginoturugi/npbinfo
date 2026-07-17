@@ -1739,6 +1739,23 @@ button.schedule-weather:hover {
   gap: 3px;
 }
 
+.schedule-pitcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-heading);
+  font-size: 11px;
+}
+
+.schedule-pitcher-label {
+  border: 1px solid var(--border-tab);
+  border-radius: 999px;
+  padding: 0 6px;
+  color: var(--color-footer);
+  font-size: 10px;
+  font-weight: 700;
+}
+
 .recent-badge {
   display: inline-flex;
   align-items: center;
