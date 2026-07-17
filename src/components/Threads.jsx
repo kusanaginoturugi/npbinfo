@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { TEAMS } from '../data/teams';
 import { isDebugMode, withNoCache } from '../utils/debug';
+import AiComment from './AiComment';
 
 const TEAM_OPTIONS = [
   { value: 'all', label: 'すべて' },
@@ -123,8 +124,16 @@ export default function Threads() {
       </div>
 
       <p className="threads-note">
-        勢いは前回取得時から増えたレス数を時間あたりに換算した近似値です。レス本文は取得・転載しません。
+        勢いは前回取得時から増えたレス数を時間あたりに換算した近似値です。レス本文は転載しません（話題まとめはAIによる要約です）。
       </p>
+
+      <AiComment
+        subjectType="threads"
+        subjectKey="all"
+        title="スレの話題まとめ"
+        titleClassName="team-page-block-title"
+        note="勢い上位スレのレス抜粋からAIが自動生成した要約です"
+      />
 
       {loading && <div className="status-msg">読み込み中...</div>}
       {error && (

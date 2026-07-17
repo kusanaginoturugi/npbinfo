@@ -5,7 +5,15 @@ import { getTeamBySlug } from '../data/teams';
 // subjectType/subjectKey は worker/index.js の /api/ai/comments/:type/:key に対応。
 // showPersona を立てると担当キャラ（12球団キャラからランダム起用）を表示する。
 // subjectKey が動的に変わる場所では key={subjectKey} を渡して remount させること。
-export default function AiComment({ subjectType, subjectKey, year, title, titleClassName, showPersona = false }) {
+export default function AiComment({
+  subjectType,
+  subjectKey,
+  year,
+  title,
+  titleClassName,
+  showPersona = false,
+  note = '成績データからAIが自動生成したコメントです',
+}) {
   const [comment, setComment] = useState(null);
 
   useEffect(() => {
@@ -40,7 +48,7 @@ export default function AiComment({ subjectType, subjectKey, year, title, titleC
         )}
         <p className="ai-comment-text">{comment.content}</p>
         <p className="ai-comment-note">
-          成績データからAIが自動生成したコメントです（{comment.model} / {generatedDate}）。
+          {note}（{comment.model} / {generatedDate}）。
         </p>
       </div>
     </>

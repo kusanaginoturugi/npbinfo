@@ -35,6 +35,24 @@
 - Gemini 無料枠のレート制限（gemini-3.5-flash、20リクエスト規模）に連続実行で接触。リトライで回収。
 - ローカルの qwen3-8b 初回ロード失敗の原因は llama-server ルーターの `--models-max` がモデル数しか見ず VRAM 空きを考慮しないこと（`tools/server/server-models.cpp` の `unload_lru()` を確認）。`/etc/conf.d/llama.cpp` を `--models-max 1` に変更して解決（リポジトリ外の設定）。
 
+### Work Log (13): 5chスレの話題まとめ（ローカルLLMの地味仕事）
+
+- 方針: キャラ芸が不要で頻度が高く無料であることが効くタスクをローカル LLM に割り当てる（モデル比較の結論を反映）。
+- `scripts/generate-thread-summaries.sh`: 勢い上位スレ（既定5本、既存 `/api/threads` 経由）の直近レス（既定30件）を read.cgi から取得し、ローカル llama.cpp（既定 `translategemma-12b`）で約200字の話題まとめを生成して push。
+  - read.cgi は Shift_JIS + `.5ch.io` へのリダイレクトあり（`curl -L` + `iconv`）。レス本文は `post-content` div から抽出し、`lN` 表示に必ず含まれる >>1（テンプレ）は捨てる。
+  - スレ間 `FETCH_SLEEP`（既定3秒）で 5ch への連続アクセスを抑制。レス本文は要約素材にのみ使い、保存・転載しない。
+- `prompts/threads.txt`: 野球の話題のみ・個人攻撃/晒し/誹謗中傷を含めない・抜粋に無いことは書かない、の要約ルール。
+- `worker/index.js`: `AI_SUBJECT_TYPES` に `threads` を追加（key は `all`）。
+- `src/components/Threads.jsx`: スレ一覧の上に「スレの話題まとめ」（`AiComment`）を表示。注記を「レス本文は転載しません（話題まとめはAIによる要約です）」に更新。
+- `src/components/AiComment.jsx`: 注記文言を `note` prop で差し替え可能にした（既定は従来の「成績データから〜」）。
+
+### Verification (13)
+
+- DRY_RUN で 5ch 取得とプロンプト合成を確認（テンプレ除去・実体参照デコード込み）。
+- ローカル E2E: `wrangler dev` + ローカル D1 に対して実生成 → push → GET → `/threads` ページの表示を playwright で確認。
+  - 荒れたレス（誹謗中傷混じり）を素材にしても、生成結果は野球の話題のみでガードが機能。
+- lint: `Threads.jsx` の1件（`set-state-in-effect`）は変更前から存在する既存問題（stash 比較で確認）。
+
 ## 2026-07-14
 
 ### Plan
