@@ -2,6 +2,23 @@
 
 ## 2026-07-18
 
+### Work Log: 5ch スレ scraping 復旧 (issue #42)
+
+- `worker/index.js` の `THREAD_BOARDS` の host / url を
+  `tanuki.5ch.net` / `rio2016.5ch.net` から `.5ch.io` に更新した。
+  5ch がドメインを移転しており、旧ドメインは `301` を返していた。
+- `wrangler.jsonc` の `assets.run_worker_first: true` を追加した。
+  Cloudflare Assets の SPA fallback (`not_found_handling: single-page-application`)
+  が `/api/threads` を Worker より先に握り、handler が呼ばれなくなっていた。
+  他の API path (`/api/schedule/YYYY-MM` など) はネストが深いためか
+  同じ罠に落ちていなかったが、`/api/threads` は 2 セグメントで直撃していた。
+- `wrangler deploy` が使う設定は `dist/npbinfo/wrangler.json` にコピーされる
+  Vite plugin の生成物のため、`wrangler.jsonc` を書き換えたあとに
+  `npm run build` を先に実行しないと変更が deploy に反映されない。
+- `read.cgi` の URL も `board.host` を経由するため、host 変更で自動的に
+  `.io` に切り替わり、`scripts/generate-thread-summaries.sh` の 5ch fetch も
+  復旧した (`stored:3` を確認)。
+
 ### Work Log: 自宅マシンで AI コメント systemd timer をセットアップ
 
 - `~/.config/npbinfo/ai-comments.env` と `~/.config/npbinfo/thread-summaries.env` を

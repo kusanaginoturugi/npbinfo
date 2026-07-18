@@ -148,16 +148,16 @@ const THREAD_BOARDS = [
   {
     key: 'livebase',
     label: '野球ch',
-    host: 'tanuki.5ch.net',
+    host: 'tanuki.5ch.io',
     board: 'livebase',
-    url: 'https://tanuki.5ch.net/livebase/subject.txt',
+    url: 'https://tanuki.5ch.io/livebase/subject.txt',
   },
   {
     key: 'base',
     label: 'プロ野球',
-    host: 'rio2016.5ch.net',
+    host: 'rio2016.5ch.io',
     board: 'base',
-    url: 'https://rio2016.5ch.net/base/subject.txt',
+    url: 'https://rio2016.5ch.io/base/subject.txt',
   },
 ];
 
