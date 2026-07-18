@@ -306,5 +306,7 @@ if subject_enabled schedule; then
     generate_and_push '今日の見所 交流戦' schedule "$today" "$system" "$prompt" "$persona" || true
     generated=1
   fi
-  [ "$generated" -eq 0 ] && echo "skip: $today の試合はない" >&2
+  if [ "$generated" -eq 0 ]; then
+    echo "skip: $today の試合はない" >&2
+  fi
 fi

@@ -1,5 +1,31 @@
 # Agent Worklog
 
+## 2026-07-18
+
+### Work Log: 自宅マシンで AI コメント systemd timer をセットアップ
+
+- `~/.config/npbinfo/ai-comments.env` と `~/.config/npbinfo/thread-summaries.env` を
+  `systemd/*.env.example` から生成し、`LLM_API_KEY` と `REFRESH_TOKEN` を投入した。
+- `~/.config/systemd/user/` にリポジトリの unit ファイル4本を symlink し、
+  `npbinfo-ai-comments.timer` (毎日 01:00) と
+  `npbinfo-thread-summaries.timer` (08/13/18/21 時) を `enable --now`。
+- `scripts/generate-ai-comments.sh` の末尾 `[ "$generated" -eq 0 ] && ...` が
+  試合ありの日に必ず exit 1 を返し、systemd 上で service を failed 扱いにする
+  バグを `if` 文に置き換えて修正した（全チーム push 自体は元々成功していた）。
+- `thread-summaries.env` に `LLM_MODEL=translategemma-12B` を追記し、
+  ローカル llama.cpp の実 ID と大文字小文字を合わせた。
+
+### Handoff
+
+- 自宅マシンの `wrangler secret put REFRESH_TOKEN` で Worker 側の値を書き換えた。
+  仕事側マシンの `~/.config/npbinfo/*.env` を同じ値に揃えるか、片方の timer を
+  停止する必要がある（放置すると仕事側の cron/timer が 401 になる）。
+- Gemini `gemini-3.5-flash` の free tier は 1 日 20 リクエストで打ち止め。
+  1回の service 実行で 17 プロンプト消費するため、手動テストと 01:00 の
+  自動実行を同日中に重ねると quota 超過する。
+- `thread-summaries` は現状 5ch `subject.txt` が両板 403 を返すため
+  `/api/threads` が空。Worker 側の scraping 修正が必要で、別 issue で対応する。
+
 ## 2026-07-17
 
 ### Work Log (11): AIコメントを成績・日程ページへ展開（issue #13 次フェーズ）
