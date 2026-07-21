@@ -1,6 +1,6 @@
 #!/bin/sh
 # AIコメントを OpenAI 互換 API で生成し、npbinfo Worker へ push する。
-# 対象: チーム調子 (team) / 個人成績ランキング (stats) / 今日の見所 (schedule)。
+# 対象: チーム調子 (team) / 個人成績ランキング (stats) / 今日の見所 (schedule) / 球場案内 (stadium)。
 # 想定実行環境: 自宅マシンの cron / systemd timer（issue #13）。
 #
 # 必須環境変数:
@@ -14,7 +14,7 @@
 #   YEAR            既定 今年
 #   LLM_SLEEP       各リクエスト間の待ち秒数（無料枠のレート制限対策）。既定 5
 #   TEAMS           生成対象を空白区切りのチーム名で絞る（例: TEAMS="日本ハム 楽天"）。既定は全チーム
-#   SUBJECTS        生成対象の種類を空白区切りで絞る（team stats schedule）。既定は全部
+#   SUBJECTS        生成対象の種類を空白区切りで絞る（team stats schedule stadium）。既定は日次対象
 #   LLM_TEMPERATURE 生成温度（0〜2）。未指定なら API 既定値。上げると文章は自由になるが脱線リスクも上がる
 #   PROMPTS_DIR     プロンプト置き場。既定はリポジトリの prompts/
 #   SYSTEM_PROMPT   システムプロンプト全体の上書き（キャラ設定+共通ルールの合成を無視する）
@@ -25,7 +25,9 @@
 #   prompts/common.txt           チーム調子コメントのルール
 #   prompts/stats.txt            個人成績ランキングコメントのルール
 #   prompts/schedule.txt         今日の見所記事のルール
+#   prompts/stadium.txt          球場案内のルール
 # team はチームごとの担当キャラ、stats / schedule は12球団キャラからランダムに起用する。
+# stadium はホームチーム以外の担当キャラをビジター目線のレビューアとして起用する。
 set -eu
 
 DRY_RUN="${DRY_RUN:-}"
@@ -66,6 +68,23 @@ random_persona_for_league() {
     pl) printf '%s\n' softbank nipponham rakuten lotte orix seibu | shuf -n 1 ;;
     *) random_persona_slug ;;
   esac
+}
+
+random_visitor_persona_for_team() {
+  home_slug=$(slug_for "$1")
+  case "$1" in
+    ヤクルト|阪神|巨人|DeNA|広島|中日)
+      candidates='yakult hanshin giants dena hiroshima chunichi'
+      ;;
+    ソフトバンク|日本ハム|楽天|ロッテ|オリックス|西武)
+      candidates='softbank nipponham rakuten lotte orix seibu'
+      ;;
+    *)
+      random_persona_slug
+      return
+      ;;
+  esac
+  printf '%s\n' $candidates | awk -v home="$home_slug" '$0 != home' | shuf -n 1
 }
 
 # キャラ設定（personas/<slug>.txt）とタスク別ルール（common.txt など）を合成する。
@@ -166,6 +185,51 @@ push_comment() {
         -d @-
 }
 
+check_ingest_auth() {
+  status=$(printf '{}' \
+    | curl -sS -o /dev/null -w '%{http_code}' -X POST "$NPBINFO_BASE_URL/api/ai/comments" \
+        -H "Authorization: Bearer $REFRESH_TOKEN" \
+        -H 'Content-Type: application/json' \
+        -d @-)
+  case "$status" in
+    400) return 0 ;;
+    401)
+      echo "error: REFRESH_TOKEN が Worker の secret と一致していないため、AIコメントを保存できません" >&2
+      return 1
+      ;;
+    *)
+      echo "error: AIコメント保存APIの事前確認に失敗しました (HTTP $status)" >&2
+      return 1
+      ;;
+  esac
+}
+
+fetch_stadium_source_text() {
+  url=$1
+  curl -LfsS --max-time 20 "$url" 2>/dev/null \
+    | node -e "
+let html = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', chunk => { html += chunk; });
+process.stdin.on('end', () => {
+  const text = html
+    .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')
+    .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')
+    .replace(/<noscript[\\s\\S]*?<\\/noscript>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;|&#160;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '\"')
+    .replace(/&#39;/g, \"'\")
+    .replace(/\\s+/g, ' ')
+    .trim();
+  console.log(text.slice(0, 3000));
+});
+" || true
+}
+
 # 生成して push する共通処理。DRY_RUN ならプロンプト表示のみ。
 generate_and_push() {
   label=$1
@@ -188,10 +252,71 @@ generate_and_push() {
     return 1
   fi
 
-  result=$(push_comment "$subject_type" "$subject_key" "$content" "$persona")
+  if ! result=$(push_comment "$subject_type" "$subject_key" "$content" "$persona"); then
+    echo "error: $label の保存に失敗" >&2
+    sleep "$LLM_SLEEP"
+    return 1
+  fi
   echo "$label [$subject_type/$subject_key]: $result"
   sleep "$LLM_SLEEP"
 }
+
+if [ -z "$DRY_RUN" ]; then
+  check_ingest_auth
+fi
+
+# ─── schedule: 今日の見所（リーグ別に1本ずつ、担当はそのリーグのキャラ） ──
+# key はセ・パが「日付:cl」「日付:pl」、交流戦カードは従来どおり「日付」。
+if subject_enabled schedule; then
+  today=$(date +%Y-%m-%d)
+  schedule_json=$(curl -fsS "$NPBINFO_BASE_URL/api/schedule/$(date +%Y-%m)")
+  games_header=$(printf '開始\tホーム\t予告先発(ホーム)\tビジター\t予告先発(ビジター)\t球場')
+
+  # 当日の試合カードをリーグ（cl / pl / inter=交流戦・分類不能）で絞って TSV にする
+  games_for_league() {
+    printf '%s' "$schedule_json" | jq -r --arg today "$today" --arg lg "$1" '
+      def lgof($t): if (["ヤクルト","阪神","巨人","DeNA","広島","中日"] | index($t)) != null then "cl"
+        elif (["ソフトバンク","日本ハム","楽天","ロッテ","オリックス","西武"] | index($t)) != null then "pl"
+        else null end;
+      .games[] | select(.date == $today)
+      | (if lgof(.homeTeam) != null and lgof(.homeTeam) == lgof(.awayTeam) then lgof(.homeTeam) else "inter" end) as $g
+      | select($g == $lg)
+      | [.startTime // "-", .homeTeam, (.homePitcher // ""), .awayTeam, (.awayPitcher // ""), .stadium // "-"] | @tsv'
+  }
+
+  standings_table() {
+    curl -fsS "$NPBINFO_BASE_URL/api/standings/$1?year=$YEAR" | jq -r '
+      ["順位","チーム","勝","敗","分","勝率","差"],
+      (.teams[] | [.rank, .name, .win, .lose, .draw, .pct, .gamesBehind])
+      | @tsv'
+  }
+
+  generated=0
+  for lg in cl pl; do
+    games=$(games_for_league "$lg")
+    [ -z "$games" ] && continue
+    persona=$(random_persona_for_league "$lg")
+    system=$(system_prompt_for "$persona" schedule.txt)
+    prompt=$(printf '%s の%sの試合カード:\n%s\n%s\n\n%s の順位表:\n%s' \
+      "$today" "$(league_label "$lg")" "$games_header" "$games" \
+      "$(league_label "$lg")" "$(standings_table "$lg")")
+    generate_and_push "今日の見所 $lg" schedule "$today:$lg" "$system" "$prompt" "$persona" || true
+    generated=1
+  done
+
+  games=$(games_for_league inter)
+  if [ -n "$games" ]; then
+    persona=$(random_persona_slug)
+    system=$(system_prompt_for "$persona" schedule.txt)
+    prompt=$(printf '%s の交流戦の試合カード:\n%s\n%s\n\nセ・リーグ の順位表:\n%s\n\nパ・リーグ の順位表:\n%s' \
+      "$today" "$games_header" "$games" "$(standings_table cl)" "$(standings_table pl)")
+    generate_and_push '今日の見所 交流戦' schedule "$today" "$system" "$prompt" "$persona" || true
+    generated=1
+  fi
+  if [ "$generated" -eq 0 ]; then
+    echo "skip: $today の試合はない" >&2
+  fi
+fi
 
 # ─── team: チーム調子コメント（チームごとの担当キャラ） ───────
 if subject_enabled team; then
@@ -258,55 +383,21 @@ if subject_enabled stats; then
   done
 fi
 
-# ─── schedule: 今日の見所（リーグ別に1本ずつ、担当はそのリーグのキャラ） ──
-# key はセ・パが「日付:cl」「日付:pl」、交流戦カードは従来どおり「日付」。
-if subject_enabled schedule; then
-  today=$(date +%Y-%m-%d)
-  schedule_json=$(curl -fsS "$NPBINFO_BASE_URL/api/schedule/$(date +%Y-%m)")
-  games_header=$(printf '開始\tホーム\t予告先発(ホーム)\tビジター\t予告先発(ビジター)\t球場')
-
-  # 当日の試合カードをリーグ（cl / pl / inter=交流戦・分類不能）で絞って TSV にする
-  games_for_league() {
-    printf '%s' "$schedule_json" | jq -r --arg today "$today" --arg lg "$1" '
-      def lgof($t): if (["ヤクルト","阪神","巨人","DeNA","広島","中日"] | index($t)) != null then "cl"
-        elif (["ソフトバンク","日本ハム","楽天","ロッテ","オリックス","西武"] | index($t)) != null then "pl"
-        else null end;
-      .games[] | select(.date == $today)
-      | (if lgof(.homeTeam) != null and lgof(.homeTeam) == lgof(.awayTeam) then lgof(.homeTeam) else "inter" end) as $g
-      | select($g == $lg)
-      | [.startTime // "-", .homeTeam, (.homePitcher // ""), .awayTeam, (.awayPitcher // ""), .stadium // "-"] | @tsv'
-  }
-
-  standings_table() {
-    curl -fsS "$NPBINFO_BASE_URL/api/standings/$1?year=$YEAR" | jq -r '
-      ["順位","チーム","勝","敗","分","勝率","差"],
-      (.teams[] | [.rank, .name, .win, .lose, .draw, .pct, .gamesBehind])
-      | @tsv'
-  }
-
-  generated=0
-  for lg in cl pl; do
-    games=$(games_for_league "$lg")
-    [ -z "$games" ] && continue
-    persona=$(random_persona_for_league "$lg")
-    system=$(system_prompt_for "$persona" schedule.txt)
-    prompt=$(printf '%s の%sの試合カード:\n%s\n%s\n\n%s の順位表:\n%s' \
-      "$today" "$(league_label "$lg")" "$games_header" "$games" \
-      "$(league_label "$lg")" "$(standings_table "$lg")")
-    generate_and_push "今日の見所 $lg" schedule "$today:$lg" "$system" "$prompt" "$persona" || true
-    generated=1
+# ─── stadium: 球場案内（ホーム以外の担当キャラによるビジター目線） ──
+if subject_enabled stadium; then
+  node --input-type=module -e "
+import { pathToFileURL } from 'node:url';
+const { STADIUMS } = await import(pathToFileURL(process.argv[1]));
+for (const s of STADIUMS) {
+  console.log([s.id, s.team, s.name, s.officialName, s.address, s.capacity, s.leftField, s.rightField, s.centerField, s.opened, s.roof, s.url].join('\t'));
+}
+" "$SCRIPT_DIR/../src/data/stadiums.js" | while IFS="$(printf '\t')" read -r id team name official address capacity left right center opened roof url; do
+    persona=$(random_visitor_persona_for_team "$team")
+    system=$(system_prompt_for "$persona" stadium.txt)
+    source_text=$(fetch_stadium_source_text "$url")
+    prompt=$(printf '球場基本情報:\nID\tホーム球団\t表示名\t正式名\t所在地\t収容人数\t左翼\t右翼\t中堅\t開場年\t屋根\t公式URL\n%s\t%s\t%s\t%s\t%s\t%s\t%sm\t%sm\t%sm\t%s\t%s\t%s\n\n公式サイト等から抽出した告知テキスト:\n%s' \
+      "$id" "$team" "$name" "$official" "$address" "$capacity" "$left" "$right" "$center" "$opened" "$roof" "$url" \
+      "${source_text:-取得できる告知テキストなし}")
+    generate_and_push "球場案内 $name" stadium "$id" "$system" "$prompt" "$persona" || true
   done
-
-  games=$(games_for_league inter)
-  if [ -n "$games" ]; then
-    persona=$(random_persona_slug)
-    system=$(system_prompt_for "$persona" schedule.txt)
-    prompt=$(printf '%s の交流戦の試合カード:\n%s\n%s\n\nセ・リーグ の順位表:\n%s\n\nパ・リーグ の順位表:\n%s' \
-      "$today" "$games_header" "$games" "$(standings_table cl)" "$(standings_table pl)")
-    generate_and_push '今日の見所 交流戦' schedule "$today" "$system" "$prompt" "$persona" || true
-    generated=1
-  fi
-  if [ "$generated" -eq 0 ]; then
-    echo "skip: $today の試合はない" >&2
-  fi
 fi

@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import { getContrastColor, getTeamInfo } from '../data/teams';
 import { STADIUMS } from '../data/stadiums';
 import { formatPrecipitation, formatTemperature, getWeatherIcon } from '../utils/weatherIcon';
+import AiComment from './AiComment';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -180,6 +181,16 @@ function StadiumDetail({ stadium }) {
       <a className="stadium-link" href={stadium.url} target="_blank" rel="noreferrer">
         公式サイト
       </a>
+
+      <AiComment
+        key={stadium.id}
+        subjectType="stadium"
+        subjectKey={stadium.id}
+        title="ビジター目線の球場案内"
+        titleClassName="stadium-ai-title"
+        showPersona
+        note="公式サイト等の情報からAIが自動生成した球場案内です"
+      />
 
       <WeatherBlock stadium={stadium} />
     </section>

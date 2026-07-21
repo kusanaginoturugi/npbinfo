@@ -1,4 +1,5 @@
 import { Suspense, lazy, useMemo, useState, useEffect } from 'react';
+import AiComment from './AiComment';
 import { getContrastColor, getTeamInfo } from '../data/teams';
 import { useFavorites } from '../hooks/useFavorites';
 import { apiCache } from '../utils/apiCache';
@@ -338,6 +339,17 @@ export default function Standings({
                 <StandingsBars teams={standingsRows} />
               </div>
             </Suspense>
+          )}
+          {graphAvailable && (
+            <AiComment
+              key={`${activeLeague}:${year}`}
+              subjectType="standings"
+              subjectKey={activeLeague}
+              year={year}
+              title="AI分析コメント"
+              titleClassName="team-page-block-title"
+              note="順位表とWeb検索の最新情報をもとにClaudeが生成したコメントです"
+            />
           )}
           {hrAdjustment && (
             <p className="standings-method-note">
