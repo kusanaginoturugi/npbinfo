@@ -1,5 +1,78 @@
 # Agent Worklog
 
+## 2026-07-21
+
+### Work Log: 順位表AI分析コメント(Claude+Web検索)を追加
+
+- Geminiが生成しているチーム別コメントとの比較用に、順位表ページ(セ/パ)に
+  Claude製・Web検索併用のAI分析コメントを追加した。
+- `worker/index.js` の `AI_SUBJECT_TYPES` に `standings` を追加。
+- `src/components/Standings.jsx` に `AiComment(subjectType="standings", subjectKey=cl/pl)`
+  を追加。セ/パタブのみ表示、交流戦タブでは非表示。
+- claude.ai のスケジュール機能(cloud routine)で `順位表AI分析（セ・パ、Claude+Web検索）`
+  を作成。毎日01:30 JST、`Bash`+`WebSearch`のみ許可、MCP接続なし。
+  - 順位表APIを取得後、Web検索で直近の話題を1〜3件補い、400字程度のコメントを
+    `POST /api/ai/comments` で保存する。
+  - 認証は既存の `REFRESH_TOKEN`(ローカル `~/.config/npbinfo/ai-comments.env` の値)を
+    ルーティンのプロンプトに直接埋め込む方式。専用トークンへの分離は見送り。
+  - routine id: `trig_01Y3ErGny1WD1EtVTBRfaHB9`
+    (https://claude.ai/code/routines/trig_01Y3ErGny1WD1EtVTBRfaHB9)
+- `docs/schedules.md` に上記ルーティンを追記。
+
+### Verification
+
+- `npm run build` 成功。
+- 本番デプロイ後、`POST /api/ai/comments` に `subjectType=standings` を送って
+  `content is required` エラーが返ることを確認(認証・subjectType自体は通っている)。
+- ルーティンの初回実行は未確認(次回実行: 2026-07-22 01:30 JST)。
+
+### Handoff
+
+- 次回01:30 JST実行後、`/api/ai/comments/standings/cl?year=2026` /
+  `.../standings/pl?year=2026` にコメントが保存されているか確認する。
+- 保存されない場合はルーティンの実行ログ(claude.aiのroutine詳細ページ)を確認する。
+
+### Work Log: AI球場案内を追加
+
+- 球場情報ページに `AiComment` を差し込み、`subjectType=stadium` / `subjectKey=球場ID` の最新コメントを表示するようにした。
+- `worker/index.js` の AI コメント subject に `stadium` を追加。
+- `prompts/stadium.txt` を追加。ビジター目線、ホームチーム紹介禁止、公式サイト等の告知テキストにないイベント・日付を捏造しないルール。
+- `scripts/generate-ai-comments.sh`:
+  - `SUBJECTS=stadium` を追加。既定値には入れず、専用 timer からだけ実行。
+  - `src/data/stadiums.js` の12球場を読み、ホーム球団以外の同一リーグ persona をレビューアとしてランダム起用。
+  - 球場公式URLを `curl` し、HTML本文を短く抽出して球場基本情報と一緒に Gemini へ渡す。取得失敗時は静的球場データだけで生成。
+- `npbinfo-stadium-ai-comments.service` / `.timer` を追加。月曜・木曜 00:10 JST に `SUBJECTS=stadium` だけ実行し、既存の 01:00 日次AI更新より先に走らせる。
+- `README.md` / `systemd/ai-comments.env.example` に運用メモを追加。
+
+### Merge / Deploy
+
+- 修正後に `origin/main` を pull。`067c1f5` まで fast-forward し、stash した球場案内差分を戻した。
+- 衝突は `docs/agent-worklog.md` のみ。2026-07-21 の球場案内ログと 2026-07-18 の pull 側ログを両方残して解消。
+- pull 側の `scripts/generate-ai-comments.sh` 末尾の exit code 修正（試合ありの日に service failed にならない修正）と、今回の `stadium` 追加を共存させた。
+- 検証: `sh -n scripts/generate-ai-comments.sh`、`npm test`、`git diff --check`、`npm run build` を実行。`npm run build` は成功。Wrangler のログ書き込みだけ sandbox の read-only 警告あり。
+- `npm run deploy` で本番デプロイ済み。Worker Version ID は `6cc18fab-8060-4795-995c-7fe0cace310c`。
+- `/api/debug` の応答確認済み。ただし未コミット差分を含むデプロイのため、`gitRevision` は最新コミット `067c1f5` のまま。
+
+### Display Debug
+
+- 本番 HTML は新しい `index-qAObjHhc.js` を参照し、球場案内の表示コードも本番 JS に含まれていた。
+- `/api/ai/comments/stadium/081?year=2026` と `/api/ai/comments/stadium?year=2026` は空。画面に出ない原因は D1 に `stadium` コメントが保存されていないこと。
+- `journalctl --user -u npbinfo-stadium-ai-comments.service` で、保存時に `curl: (22) ... 401` を確認。ローカル `~/.config/npbinfo/ai-comments.env` の `REFRESH_TOKEN` が本番 Worker の secret と一致していない。
+- 同じ実行で Gemini free tier の `20 requests/day` quota にも到達。401 のまま複数球場を生成して quota を消費していた。
+- `scripts/generate-ai-comments.sh` に `check_ingest_auth` を追加。DRY_RUN 以外では LLM 生成前に `/api/ai/comments` へ空 JSON を POST し、400 なら認証OK、401 なら即停止する。push 失敗も明示的に `error: ... の保存に失敗` を返すようにした。
+- ローカル env で事前確認を実行し、現状は `REFRESH_TOKEN が Worker の secret と一致していない` で停止することを確認。表示反映には token を揃えたうえで、Gemini quota リセット後または別モデルで `SUBJECTS=stadium` を再実行する必要がある。
+
+### Schedule Adjustment
+
+- `npbinfo-ai-comments.timer` を火・水・金・土・日 01:00 に変更し、月曜・木曜は通常AIコメントを休みにした。
+- 定期実行一覧を `docs/schedules.md` に保存。README の AI コメント生成節から参照するようにした。
+- 試合日程ページの「今日の見所」が出ない件を確認。本番の日程データは `2026-07-21` の4試合を返しているが、`/api/ai/comments/schedule?year=2026` には `2026-07-21` のコメントが未保存だった。
+- `scripts/generate-ai-comments.sh` の通常AI生成順を `schedule -> team -> stats` に変更。Gemini quota や途中失敗時でも、試合日程コメントを先に生成・保存する。
+- DRY_RUN で `schedule/2026-07-21:cl`、`schedule/2026-07-21:pl` が先頭に出ることを確認。
+- 更新済み token の確認: Cloudflare 側には `REFRESH_TOKEN` secret が存在するが、このマシンの `~/.config/npbinfo/ai-comments.env` は更新日時が `2026-07-15 14:47 JST` のまま。systemd が読むローカル env の `REFRESH_TOKEN` も更新する必要がある。
+- `~/.config/npbinfo/ai-comments.env` の `REFRESH_TOKEN` を `thread-summaries.env` と同じ値へ更新後、空 JSON の保存API POST が HTTP 400 `invalid subjectType` になることを確認。401 ではないため認証は通っている。
+- ただし同日の Gemini free tier quota はまだ `20 requests/day` 超過のため、`SUBJECTS=schedule` の実生成は quota リセット後に実行する。
+
 ## 2026-07-18
 
 ### Work Log: 5ch スレ scraping 復旧 (issue #42)
@@ -262,7 +335,53 @@
 - 棒グラフはライト・ダーク両テーマでスクショ確認（ライト: オリックス金縁/ロッテ銀縁、ダーク: ロッテ白縁）。
 - レーダーはローカルKVに補正本塁打データが無く未描画（既存挙動）のため、本番デプロイ後に確認する。
 
+## 2026-07-17
+
+### Work Log: `justdoit` ワークフローを Codex 版から Claude 版に置き換え
+
+- `.github/workflows/ai-justdoit.yml` を `anthropics/claude-code-action@v1` ベースに書き換えた。
+  - `justdoit` ラベル付与で起動。workflow が `justdoit` / `whatsup?` を外して `ai-working` を付ける。
+  - Claude が Issue と全コメントを読み、情報不足なら質問コメント + `whatsup?` で終了、
+    明確なら設計コメント → 実装 → `npm test` → `ai/issue-<番号>` ブランチ + PR + `ai-pr-opened`。
+  - 質問・完了コメントで Issue 作成者を @mention して GitHub 通知を飛ばす。
+  - 失敗時は `ai-failed` を付けて Actions ログの URL をコメントする。
+  - ラベル操作・コメント・PR 作成は Claude 自身が `gh` で行う（`--allowedTools` で制限）。
+  - 計画承認ゲート（旧 `ai-plan-review` / `ai-implement`）は廃止し、justdoit → 質問 or 実装の2択に簡略化。
+- `.github/codex/`（Codex 用プロンプト2本）を削除した。
+- `README.md` のラベル運用表と事前準備を Claude 版に更新した。
+
+### Verification
+
+- `ruby -e "require 'yaml'; YAML.load_file(...)"` で workflow YAML の構文確認。
+- GitHub Actions 実行は未実施。
+
+### Handoff
+
+- 稼働に必要な残作業（すべて GitHub 側の設定）:
+  - repository secret `CLAUDE_CODE_OAUTH_TOKEN` を登録（`claude setup-token` で発行）。
+  - Claude GitHub App を kusanaginoturugi/npbinfo にインストール。
+  - Settings → Actions → General で "Allow GitHub Actions to create and approve pull requests" を有効化。
+- `GITHUB_TOKEN` で作られた PR では `ci.yml` が自動起動しない点は README に記載済み。
+
 ## 2026-07-15
+
+### Work Log (10): `justdoit` Issue のAI計画・実装ワークフロー追加
+
+- `.github/workflows/ai-justdoit.yml` を追加した。
+  - `justdoit` ラベル付与時は計画フェーズのみ実行し、Codex を `read-only` で動かす。
+  - 計画コメント後に `ai-plan-review` を付け、担当者が `ai-implement` を付けた場合だけ実装フェーズへ進む。
+  - 実装フェーズは Codex を `workspace-write` で動かし、`npm test` 成功後に `ai/issue-<番号>` ブランチを push して PR を作る。
+  - `ai-working` と workflow concurrency で重複実行を抑止する。
+- `.github/codex/prompts/issue-plan.md` と `.github/codex/prompts/issue-implement.md` を追加した。
+  - 計画プロンプトは編集・ブランチ作成を禁止。
+  - 実装プロンプトは承認済み計画の範囲に限定し、commit / push / PR 作成は workflow に任せる。
+- `README.md` にラベル運用と必要 secret を追記した。
+
+### Verification (10)
+
+- `ruby -e "require 'yaml'; YAML.load_file('.github/workflows/ai-justdoit.yml')"` で workflow YAML の構文確認。
+- `npm test` 通過。
+- GitHub Actions 実行は未実施。
 
 ### Work Log (6): レーダーの勝率を守備率に置き換え
 

@@ -1,0 +1,11 @@
+[Unit]
+Description=Monday/Thursday npbinfo AI stadium guides before other updates
+
+[Timer]
+OnCalendar=Mon,Thu *-*-* 00:10:00
+# 球場案内は他のAI更新より先に走らせる。遅延は入れない。
+Persistent=true
+RandomizedDelaySec=0
+
+[Install]
+WantedBy=timers.target
