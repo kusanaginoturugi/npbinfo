@@ -2310,7 +2310,7 @@ async function handleRecent(league, request, env) {
 // ─── AIコメント ───────────────────────────────────────────────
 // 生成は自宅マシン側のバッチ（scripts/generate-ai-comments.sh）が行い、
 // ここは D1 への保存（push）と読み出しだけを担当する。
-const AI_SUBJECT_TYPES = new Set(['team', 'player', 'weekly', 'stats', 'schedule', 'stadium', 'standings', 'threads']);
+const AI_SUBJECT_TYPES = new Set(['team', 'player', 'weekly', 'stats', 'schedule', 'stadium', 'stadium_food', 'standings', 'threads']);
 const AI_CONTENT_MAX_LENGTH = 4000;
 
 async function handleAiCommentGet(subjectType, subjectKey, request, env) {

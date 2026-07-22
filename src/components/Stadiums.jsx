@@ -192,6 +192,16 @@ function StadiumDetail({ stadium }) {
         note="公式サイト等の情報からAIが自動生成した球場案内です"
       />
 
+      <AiComment
+        key={`food-${stadium.id}`}
+        subjectType="stadium_food"
+        subjectKey={stadium.id}
+        title="球場飯情報"
+        titleClassName="stadium-ai-title"
+        showPersona
+        note="公式サイト等の情報からAIが自動生成した球場飯情報です"
+      />
+
       <WeatherBlock stadium={stadium} />
     </section>
   );

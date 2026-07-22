@@ -1,6 +1,6 @@
 #!/bin/sh
 # AIコメントを OpenAI 互換 API で生成し、npbinfo Worker へ push する。
-# 対象: チーム調子 (team) / 個人成績ランキング (stats) / 今日の見所 (schedule) / 球場案内 (stadium)。
+# 対象: チーム調子 (team) / 個人成績ランキング (stats) / 今日の見所 (schedule) / 球場案内・球場飯 (stadium)。
 # 想定実行環境: 自宅マシンの cron / systemd timer（issue #13）。
 #
 # 必須環境変数:
@@ -26,8 +26,11 @@
 #   prompts/stats.txt            個人成績ランキングコメントのルール
 #   prompts/schedule.txt         今日の見所記事のルール
 #   prompts/stadium.txt          球場案内のルール
+#   prompts/stadium_food.txt     球場飯情報のルール
 # team はチームごとの担当キャラ、stats / schedule は12球団キャラからランダムに起用する。
-# stadium はホームチーム以外の担当キャラをビジター目線のレビューアとして起用する。
+# stadium は当日その球場で実際にビジター側として試合をするチームがあればそれを、
+# なければ今回の実行でまだ起用していないチーム（ホーム以外）から選び、
+# 球場案内・球場飯情報の両方を同じキャラで担当する。
 set -eu
 
 DRY_RUN="${DRY_RUN:-}"
@@ -85,6 +88,43 @@ random_visitor_persona_for_team() {
       ;;
   esac
   printf '%s\n' $candidates | awk -v home="$home_slug" '$0 != home' | shuf -n 1
+}
+
+# 指定チームが本拠地で「今日」実際にビジターとして対戦する相手チーム名を返す（試合がなければ空）
+away_team_at_home() {
+  printf '%s' "$SCHEDULE_JSON" | jq -r --arg today "$STADIUM_TODAY" --arg team "$1" '
+    [.games[] | select(.date == $today) | select(.homeTeam == $team)] | .[0].awayTeam // empty'
+}
+
+# stadium のフォールバック担当キャラを選ぶ（当日その球場で実際のビジターが確定しなかった場合用）。
+#   同リーグ・ホーム以外で、今回の実行でまだ使っていないチームからシャッフルで選ぶ。
+#   候補が尽きた場合の保険として、従来通りホーム以外からランダムに選ぶ。
+# 呼び出し側で STADIUM_USED に積んで、同じ実行内で全チームに一巡してから重複させる。
+pick_fallback_persona() {
+  team=$1
+  home_slug=$(slug_for "$team")
+  case "$team" in
+    ヤクルト|阪神|巨人|DeNA|広島|中日) candidates='yakult hanshin giants dena hiroshima chunichi' ;;
+    ソフトバンク|日本ハム|楽天|ロッテ|オリックス|西武) candidates='softbank nipponham rakuten lotte orix seibu' ;;
+    *) candidates='' ;;
+  esac
+
+  if [ -n "$candidates" ]; then
+    persona=$(printf '%s\n' $candidates | awk -v home="$home_slug" '$0 != home' \
+      | while IFS= read -r c; do
+          case " $STADIUM_USED " in
+            *" $c "*) ;;
+            *) echo "$c" ;;
+          esac
+        done \
+      | shuf -n 1)
+    if [ -n "$persona" ]; then
+      printf '%s' "$persona"
+      return
+    fi
+  fi
+
+  random_visitor_persona_for_team "$team"
 }
 
 # キャラ設定（personas/<slug>.txt）とタスク別ルール（common.txt など）を合成する。
@@ -383,21 +423,65 @@ if subject_enabled stats; then
   done
 fi
 
-# ─── stadium: 球場案内（ホーム以外の担当キャラによるビジター目線） ──
+# ─── stadium: 球場案内・球場飯（実際のビジターチーム優先、いなければ持ち回りで選んだ担当キャラ） ──
 if subject_enabled stadium; then
-  node --input-type=module -e "
+  STADIUM_TODAY=$(date +%Y-%m-%d)
+  SCHEDULE_JSON=$(curl -fsS "$NPBINFO_BASE_URL/api/schedule/$(date +%Y-%m)")
+  STADIUM_USED=''
+  stadium_tmp=$(mktemp)
+  trap 'rm -f "$stadium_tmp"' EXIT
+
+  stadium_rows=$(node --input-type=module -e "
 import { pathToFileURL } from 'node:url';
 const { STADIUMS } = await import(pathToFileURL(process.argv[1]));
 for (const s of STADIUMS) {
   console.log([s.id, s.team, s.name, s.officialName, s.address, s.capacity, s.leftField, s.rightField, s.centerField, s.opened, s.roof, s.url].join('\t'));
 }
-" "$SCRIPT_DIR/../src/data/stadiums.js" | while IFS="$(printf '\t')" read -r id team name official address capacity left right center opened roof url; do
-    persona=$(random_visitor_persona_for_team "$team")
-    system=$(system_prompt_for "$persona" stadium.txt)
+" "$SCRIPT_DIR/../src/data/stadiums.js")
+
+  # 1巡目: 当日その球場で実際にビジターとして対戦するチームを先に確定し、STADIUM_USED に積む。
+  # (real match の予約をフォールバックのプール選定より先に済ませておかないと、
+  #  後段の球場が本物のビジターと同じチームをプールから重複して選んでしまう)
+  : > "$stadium_tmp"
+  while IFS="$(printf '\t')" read -r id team name official address capacity left right center opened roof url; do
+    [ -z "$id" ] && continue
+    home_slug=$(slug_for "$team")
+    persona=''
+    away=$(away_team_at_home "$team")
+    if [ -n "$away" ]; then
+      away_slug=$(slug_for "$away")
+      if [ -n "$away_slug" ] && [ "$away_slug" != "$home_slug" ]; then
+        persona=$away_slug
+        STADIUM_USED="$STADIUM_USED $persona"
+      fi
+    fi
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+      "$id" "$team" "$name" "$official" "$address" "$capacity" "$left" "$right" "$center" "$opened" "$roof" "$url" "$persona" \
+      >> "$stadium_tmp"
+  done <<STADIUM_EOF
+$stadium_rows
+STADIUM_EOF
+
+  # 2巡目: 実際のビジターが決まらなかった球場にフォールバックで担当キャラを割り当て、生成・保存する。
+  while IFS="$(printf '\t')" read -r id team name official address capacity left right center opened roof url persona; do
+    [ -z "$id" ] && continue
+    if [ -z "$persona" ]; then
+      persona=$(pick_fallback_persona "$team")
+      STADIUM_USED="$STADIUM_USED $persona"
+    fi
+
     source_text=$(fetch_stadium_source_text "$url")
-    prompt=$(printf '球場基本情報:\nID\tホーム球団\t表示名\t正式名\t所在地\t収容人数\t左翼\t右翼\t中堅\t開場年\t屋根\t公式URL\n%s\t%s\t%s\t%s\t%s\t%s\t%sm\t%sm\t%sm\t%s\t%s\t%s\n\n公式サイト等から抽出した告知テキスト:\n%s' \
+    info=$(printf '球場基本情報:\nID\tホーム球団\t表示名\t正式名\t所在地\t収容人数\t左翼\t右翼\t中堅\t開場年\t屋根\t公式URL\n%s\t%s\t%s\t%s\t%s\t%s\t%sm\t%sm\t%sm\t%s\t%s\t%s\n\n公式サイト等から抽出したテキスト:\n%s' \
       "$id" "$team" "$name" "$official" "$address" "$capacity" "$left" "$right" "$center" "$opened" "$roof" "$url" \
       "${source_text:-取得できる告知テキストなし}")
-    generate_and_push "球場案内 $name" stadium "$id" "$system" "$prompt" "$persona" || true
-  done
+
+    system=$(system_prompt_for "$persona" stadium.txt)
+    generate_and_push "球場案内 $name" stadium "$id" "$system" "$info" "$persona" || true
+
+    system_food=$(system_prompt_for "$persona" stadium_food.txt)
+    generate_and_push "球場飯 $name" stadium_food "$id" "$system_food" "$info" "$persona" || true
+  done < "$stadium_tmp"
+
+  rm -f "$stadium_tmp"
+  trap - EXIT
 fi
