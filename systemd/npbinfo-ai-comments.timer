@@ -1,8 +1,8 @@
 [Unit]
-Description=npbinfo AI comments at 01:00 except Monday/Thursday
+Description=npbinfo AI comments at 06:00 except Monday/Thursday
 
 [Timer]
-OnCalendar=Tue,Wed,Fri,Sat,Sun *-*-* 01:00:00
+OnCalendar=Tue,Wed,Fri,Sat,Sun *-*-* 06:00:00
 # マシンが落ちていた場合は次回起動時に追い実行する
 Persistent=true
 RandomizedDelaySec=300
