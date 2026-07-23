@@ -32,7 +32,13 @@ export default function AiComment({
 
   if (!comment) return null;
 
-  const generatedDate = new Date(comment.generatedAt).toLocaleDateString('ja-JP');
+  const generatedDate = new Date(comment.generatedAt).toLocaleString('ja-JP', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
   const personaTeam = showPersona && comment.persona ? getTeamBySlug(comment.persona) : null;
 
   return (
