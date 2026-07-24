@@ -60,7 +60,7 @@ generate_summary() {
     --arg system "$SYSTEM_PROMPT" \
     --arg user "$prompt" \
     '{model: $model, messages: [{role: "system", content: $system}, {role: "user", content: $user}]}' \
-    | curl -sS "$LLM_BASE_URL/chat/completions" \
+    | curl -sS --max-time 300 "$LLM_BASE_URL/chat/completions" \
         -H "Authorization: Bearer $LLM_API_KEY" \
         -H 'Content-Type: application/json' \
         -d @-)
