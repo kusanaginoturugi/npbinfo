@@ -73,11 +73,25 @@ generate_summary() {
   printf '%s' "$response" | jq -r '.choices[0].message.content // empty'
 }
 
-# ─── スレごとに生成して items に貯める ─────────────────────────
+push_summary() {
+  thread_id=$1
+  content=$2
+  jq -n \
+    --arg key "$thread_id" \
+    --argjson year "$year" \
+    --arg content "$content" \
+    --arg model "$LLM_MODEL" \
+    '{subjectType: "threads", subjectKey: $key, year: $year, content: $content, model: $model}' \
+    | curl -fsS -X POST "$NPBINFO_BASE_URL/api/ai/comments" \
+        -H "Authorization: Bearer $REFRESH_TOKEN" \
+        -H 'Content-Type: application/json' \
+        -d @-
+}
+
+# ─── スレごとに生成して即座に push ───────────────────────────
 threads_json=$(curl -fsS "$NPBINFO_BASE_URL/api/threads?sort=momentum&limit=$THREADS_LIMIT")
-items_file=$(mktemp)
-trap 'rm -f "$items_file"' EXIT
 year=$(date +%Y)
+generated=0
 
 for i in $(seq 0 $((THREADS_LIMIT - 1))); do
   thread_id=$(printf '%s' "$threads_json" | jq -r ".threads[$i].id // empty")
@@ -106,28 +120,19 @@ for i in $(seq 0 $((THREADS_LIMIT - 1))); do
     echo "error: 生成に失敗: $title" >&2
     continue
   fi
-  jq -n \
-    --arg key "$thread_id" \
-    --argjson year "$year" \
-    --arg content "$content" \
-    --arg model "$LLM_MODEL" \
-    '{subjectType: "threads", subjectKey: $key, year: $year, content: $content, model: $model}' \
-    >> "$items_file"
-  echo "generated: $title ($thread_id)"
+
+  if result=$(push_summary "$thread_id" "$content"); then
+    echo "generated: $title ($thread_id): $result"
+    generated=$((generated + 1))
+  else
+    echo "error: pushに失敗: $title" >&2
+  fi
 done
 
 if [ -n "$DRY_RUN" ]; then
   exit 0
 fi
-if [ ! -s "$items_file" ]; then
+if [ "$generated" -eq 0 ]; then
   echo "error: 1件も生成できなかった" >&2
   exit 1
 fi
-
-# ─── まとめて push ────────────────────────────────────────────
-result=$(jq -s '{items: .}' "$items_file" \
-  | curl -fsS -X POST "$NPBINFO_BASE_URL/api/ai/comments" \
-      -H "Authorization: Bearer $REFRESH_TOKEN" \
-      -H 'Content-Type: application/json' \
-      -d @-)
-echo "push: $result"
