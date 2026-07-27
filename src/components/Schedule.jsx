@@ -67,6 +67,13 @@ function findStadiumByGameName(name) {
   }) ?? null;
 }
 
+// 今日に試合がない日は、直近の過去試合日（無ければ直近の未来試合日）にフォールバックする。
+// availableDates は昇順ソート済み前提。
+function findFallbackDate(availableDates, today) {
+  const past = availableDates.filter(date => date <= today);
+  return past.length ? past[past.length - 1] : availableDates[0];
+}
+
 function getWeatherCacheKey(stadium, date) {
   if (!stadium || !date) return null;
   return `${stadium.lat},${stadium.lng}:${date}`;
@@ -387,8 +394,8 @@ export default function Schedule({ initialMonth = CURRENT_MONTH, onMonthChange, 
     if (availableDates.includes(selectedDate)) return;
 
     const today = formatDateValue(CURRENT_DATE);
-    const nextDate = month === CURRENT_MONTH && availableDates.includes(today)
-      ? today
+    const nextDate = month === CURRENT_MONTH
+      ? findFallbackDate(availableDates, today)
       : availableDates[0];
     setSelectedDate(nextDate);
   }, [availableDates, month, selectedDate]);
