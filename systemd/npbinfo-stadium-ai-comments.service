@@ -2,6 +2,8 @@
 Description=npbinfo AI stadium guide generation
 Wants=network-online.target
 After=network-online.target
+StartLimitBurst=6
+StartLimitIntervalSec=2h
 
 [Service]
 Type=oneshot
@@ -10,3 +12,5 @@ WorkingDirectory=%h/src/npbinfo
 EnvironmentFile=%h/.config/npbinfo/ai-comments.env
 Environment=SUBJECTS=stadium
 ExecStart=%h/src/npbinfo/scripts/generate-ai-comments.sh
+Restart=on-failure
+RestartSec=10min

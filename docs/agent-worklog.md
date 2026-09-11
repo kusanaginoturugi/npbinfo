@@ -73,6 +73,14 @@
 - `~/.config/npbinfo/ai-comments.env` の `REFRESH_TOKEN` を `thread-summaries.env` と同じ値へ更新後、空 JSON の保存API POST が HTTP 400 `invalid subjectType` になることを確認。401 ではないため認証は通っている。
 - ただし同日の Gemini free tier quota はまだ `20 requests/day` 超過のため、`SUBJECTS=schedule` の実生成は quota リセット後に実行する。
 
+### Stadium Timer Debug
+
+- `npbinfo-stadium-ai-comments.timer` の設定は `Mon,Thu *-*-* 00:10:00` で正しい。`systemd-analyze calendar` でも次回は `2026-08-03 00:10:00 JST`。
+- `journalctl --user -u npbinfo-stadium-ai-comments.service` を確認。`2026-07-27 08:47` と `2026-07-30 08:59` の追い実行は、起動直後に `curl: (6) Could not resolve host: npbinfo.kusanaginoturugi.workers.dev` で失敗していた。
+- 原因は `Persistent=true` の追い実行がネットワーク/DNS準備前に走ったこと。`Wants/After=network-online.target` だけでは user service の起動直後DNS待ちとしては不十分だった。
+- `scripts/generate-ai-comments.sh` の保存API事前確認に `curl --retry 30 --retry-delay 10 --retry-all-errors` を追加し、DNS/一時障害を最大約5分待つようにした。
+- `npbinfo-stadium-ai-comments.service` に `Restart=on-failure` / `RestartSec=10min` と `[Unit]` の `StartLimitBurst=6` / `StartLimitIntervalSec=2h` を追加。起動直後に落ちても最大約1時間再試行する。
+
 ## 2026-07-18
 
 ### Work Log: 5ch スレ scraping 復旧 (issue #42)

@@ -523,7 +523,7 @@ async function readStandingsFromD1(env, league, year) {
   if (!hasD1(env) || !shouldReadStandingsFromD1(year)) return null;
 
   try {
-    const result = await env.DB.prepare(`
+    const result = await env.DB.withSession().prepare(`
       SELECT payload_json
       FROM standings_payloads
       WHERE year = ?1
@@ -1768,7 +1768,7 @@ function mapCells(cells, fields) {
   for (const [idx, field] of Object.entries(fields)) {
     obj[field] = cells[idx] ?? '-';
   }
-  
+
   // 名前とチームの分離 (例: "佐藤　輝明(神)" -> name: "佐藤　輝明", team: "神")
   if (obj.name_raw) {
     const match = obj.name_raw.match(/^(.*?)\((.*?)\)$/);
@@ -1786,7 +1786,7 @@ function mapCells(cells, fields) {
   if (obj.team) {
     obj.team = obj.team.replace(/[()（）]/g, '').trim();
   }
-  
+
   return obj;
 }
 
@@ -1878,7 +1878,7 @@ async function handleStats(type, league, request, env) {
   const leagueCode = league === 'cl' ? 'c' : 'p';
   const prefix = type === 'batting' ? 'bat' : 'pit';
   const url = `https://npb.jp/bis/${year}/stats/${prefix}_${leagueCode}.html`;
-  
+
   let fields;
   if (type === 'batting') {
     fields = isLegacy ? BATTING_FIELDS_LEGACY : BATTING_FIELDS;
@@ -2322,7 +2322,7 @@ async function handleAiCommentGet(subjectType, subjectKey, request, env) {
   const url = new URL(request.url);
   const year = Number.parseInt(url.searchParams.get('year') || String(getCurrentYear()), 10);
   try {
-    const result = await env.DB.prepare(`
+    const result = await env.DB.withSession().prepare(`
       SELECT content, model, persona, generated_at
       FROM ai_comments
       WHERE subject_type = ?1
@@ -2361,7 +2361,7 @@ async function handleAiCommentList(subjectType, request, env) {
   const url = new URL(request.url);
   const year = Number.parseInt(url.searchParams.get('year') || String(getCurrentYear()), 10);
   try {
-    const result = await env.DB.prepare(`
+    const result = await env.DB.withSession().prepare(`
       SELECT subject_key, content, model, persona, MAX(generated_at) AS generated_at
       FROM ai_comments
       WHERE subject_type = ?1

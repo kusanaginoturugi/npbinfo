@@ -227,7 +227,8 @@ push_comment() {
 
 check_ingest_auth() {
   status=$(printf '{}' \
-    | curl -sS -o /dev/null -w '%{http_code}' -X POST "$NPBINFO_BASE_URL/api/ai/comments" \
+    | curl -sS --retry 30 --retry-delay 10 --retry-all-errors -o /dev/null -w '%{http_code}' \
+        -X POST "$NPBINFO_BASE_URL/api/ai/comments" \
         -H "Authorization: Bearer $REFRESH_TOKEN" \
         -H 'Content-Type: application/json' \
         -d @-)
