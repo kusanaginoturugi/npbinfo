@@ -1,5 +1,13 @@
 # Agent Worklog
 
+## 2026-10-24: 開発依存のセキュリティ更新
+
+- `devDependencies` 13 件を npm の最新リリースへ更新。`vite-plugin-pwa` は 2.0.0、`eslint` / `@eslint/js` は 10 系へ更新した。
+- `miniflare` が脆弱な `undici` 7.29.1 を固定していたため、`overrides` で修正版 7.30.1 を指定した。上流が修正版を使うようになったら override を外す。
+- `npm audit` は更新前の 11 件（高 8、中 3）から高 7 件へ減少。残りは `@cloudflare/puppeteer` → `@puppeteer/browsers` の依存経路にある。`npm audit fix --force` は Puppeteer 0.0.11 へのダウングレードを提案するため適用していない。
+- `npm ci`、`npm test`、`npm run build`、`npm audit --omit=dev --audit-level=high` は成功。`npx eslint .` は 21 エラー・3 警告で失敗。既存ログにも記載された Worker global や React Hooks などの指摘で、今回の依存更新ではコードを変更していない。
+- ユーザーの指示により main の保護設定は変更していない。
+
 ## 2026-07-21
 
 ### Work Log: 順位表AI分析コメント(Claude+Web検索)を追加
