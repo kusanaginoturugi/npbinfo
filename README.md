@@ -148,6 +148,7 @@ GitHub の脆弱性チェックは `.github/workflows/codeql.yml`（コード解
 `.github/dependabot.yml`（npm と Actions の週次更新）で実行する。
 CI では `npm audit --omit=dev --audit-level=high` も実行する。
 ローカルで開発依存を含めて確認するときは `npm audit` を使う。
+他のリポジトリで同じ点検をするときは [脆弱性点検手順](docs/security-maintenance-playbook.md) を参照する。
 
 ## AI コメント生成
 

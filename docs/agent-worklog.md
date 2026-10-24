@@ -7,6 +7,7 @@
 - `npm audit` は更新前の 11 件（高 8、中 3）から高 7 件へ減少。残りは `@cloudflare/puppeteer` → `@puppeteer/browsers` の依存経路にある。`npm audit fix --force` は Puppeteer 0.0.11 へのダウングレードを提案するため適用していない。
 - `npm ci`、`npm test`、`npm run build`、`npm audit --omit=dev --audit-level=high` は成功。`npx eslint .` は 21 エラー・3 警告で失敗。既存ログにも記載された Worker global や React Hooks などの指摘で、今回の依存更新ではコードを変更していない。
 - ユーザーの指示により main の保護設定は変更していない。
+- Dependabot 脆弱性アラートを GitHub API で有効化し、HTTP 204 で確認した。別 repo でも使える手順を `docs/security-maintenance-playbook.md` に記録した。
 
 ## 2026-07-21
 
