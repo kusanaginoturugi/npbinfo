@@ -141,6 +141,14 @@ npm run deploy
 | GET | `/og/standings/:league` | OGP 用順位表 SVG。既存互換用 |
 | GET | `/api/park-factors/hr` | 本塁打パークファクターと算出メタデータ |
 
+## セキュリティチェック
+
+GitHub の脆弱性チェックは `.github/workflows/codeql.yml`（コード解析）、
+`.github/workflows/dependency-review.yml`（PR の依存差分）、
+`.github/dependabot.yml`（npm と Actions の週次更新）で実行する。
+CI では `npm audit --omit=dev --audit-level=high` も実行する。
+ローカルで開発依存を含めて確認するときは `npm audit` を使う。
+
 ## AI コメント生成
 
 `scripts/generate-ai-comments.sh` は Gemini の OpenAI 互換 API で本文を生成し、

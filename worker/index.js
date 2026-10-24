@@ -2412,14 +2412,39 @@ async function handleAiCommentIngest(request, env) {
     return Response.json({ ok: false, error: 'D1 unavailable' }, { status: 503 });
   }
 
+  const maxBodyBytes = 1024 * 1024;
+  const reader = request.body?.getReader();
+  if (!reader) return Response.json({ ok: false, error: 'invalid JSON body' }, { status: 400 });
+
   let body;
   try {
-    body = await request.json();
+    const chunks = [];
+    let size = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBodyBytes) {
+        await reader.cancel();
+        return Response.json({ ok: false, error: 'body too large' }, { status: 413 });
+      }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    body = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
   } catch {
     return Response.json({ ok: false, error: 'invalid JSON body' }, { status: 400 });
   }
 
   const items = Array.isArray(body?.items) ? body.items : [body];
+  if (items.length > 50) {
+    return Response.json({ ok: false, error: 'too many items' }, { status: 400 });
+  }
   for (const item of items) {
     const error = validateAiCommentItem(item);
     if (error) return Response.json({ ok: false, error }, { status: 400 });
