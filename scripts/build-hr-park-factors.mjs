@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import {
   normalizeParkFactorVenue,
@@ -15,7 +15,11 @@ const CONCURRENCY = 10;
 const REGRESSION_GAMES = 60;
 
 async function fetchText(url, cachePath) {
-  if (existsSync(cachePath)) return readFile(cachePath, 'utf8');
+  try {
+    return await readFile(cachePath, 'utf8');
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
   const response = await fetch(url, {
     headers: { 'User-Agent': 'npbinfo-park-factor-builder/1.0' },
   });
@@ -103,7 +107,7 @@ const allPaths = (await Promise.all(YEARS.map(schedulePaths))).flat();
 console.log(`detail pages: ${allPaths.length}`);
 
 const games = (await mapLimit(allPaths, CONCURRENCY, async (gamePath, index) => {
-  const cacheName = gamePath.replace(/^\/|\/$/g, '').replaceAll('/', '-') + '.html';
+  const cacheName = `${createHash('sha256').update(gamePath).digest('hex')}.html`;
   const html = await fetchText(`https://npb.jp${gamePath}`, path.join(CACHE_DIR, cacheName));
   if ((index + 1) % 100 === 0) console.log(`fetched: ${index + 1}/${allPaths.length}`);
   return parseNpbGameDetail(html, gamePath);
