@@ -19,7 +19,7 @@
     "concurrently": "^9.2.1",
     "leaflet": "^1.9.4",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@cloudflare/puppeteer": "^1.4.0",
